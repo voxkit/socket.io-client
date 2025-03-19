@@ -15,4 +15,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "engine.io-client-kt"
+rootProject.name = "engineio-client"
