@@ -1,0 +1,7 @@
+# Default ignored files
+shelf/
+workspace.xml
+usage.statistics.xml
+modules.xml
+*.iml
+gradle.xml
