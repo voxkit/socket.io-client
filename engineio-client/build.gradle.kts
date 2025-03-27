@@ -6,9 +6,6 @@ plugins {
     alias(libs.plugins.androidLibrary)
 }
 
-group = "io.voxkit"
-version = "0.1.0"
-
 kotlin {
     explicitApi()
 

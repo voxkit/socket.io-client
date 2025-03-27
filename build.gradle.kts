@@ -3,3 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.androidLibrary) apply false
 }
+
+group = "io.voxkit"
+version = "0.1.0"
