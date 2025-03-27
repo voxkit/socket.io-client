@@ -15,7 +15,7 @@ A Kotlin Multiplatform implementation of the [Engine.IO](https://socket.io/docs/
 
 ```kotlin
 dependencies {
-    implementation("io.voxkit:engineio-client:$engioneIoVersion")
+    implementation("io.voxkit:engineio-client:$engineIOVersion")
 }
 ```
 
