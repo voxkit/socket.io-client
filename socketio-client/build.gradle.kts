@@ -23,34 +23,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api(libs.kotlin.serialization)
-            api(libs.kotlin.coroutines.core)
-            api(libs.kotlin.datetime)
-            api(libs.ktor.client.core)
-            api(libs.ktor.client.websockets)
-            api(libs.kermit)
-        }
-
-        val jvmAndAndroid by creating {
-            dependsOn(commonMain.get())
-            dependencies {
-                implementation(libs.ktor.client.okhttp)
-            }
-        }
-
-        jvmMain {
-            dependsOn(jvmAndAndroid)
-            dependencies {
-                implementation(libs.logback.classic)
-            }
-        }
-
-        androidMain {
-            dependsOn(jvmAndAndroid)
-        }
-
-        appleMain.dependencies {
-            implementation(libs.ktor.client.darwin)
+            implementation(project(":engineio-client"))
         }
 
         commonTest.dependencies {
