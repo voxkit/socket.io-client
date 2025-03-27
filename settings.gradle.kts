@@ -15,4 +15,8 @@ pluginManagement {
     }
 }
 
-rootProject.name = "engineio-client"
+rootProject.name = "socket.io"
+
+include(
+    "engineio-client",
+)

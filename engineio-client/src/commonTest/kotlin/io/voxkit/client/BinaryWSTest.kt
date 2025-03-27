@@ -7,16 +7,12 @@ import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.parser.Packet
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.time.Duration.Companion.seconds
 
 class BinaryWSTest {
     @Test
