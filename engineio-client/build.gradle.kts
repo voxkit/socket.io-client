@@ -31,7 +31,6 @@ kotlin {
             implementation(libs.kotlin.datetime)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.websockets)
-            implementation(libs.concurrent.collections)
             implementation(libs.kermit)
         }
 
