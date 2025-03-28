@@ -1,12 +1,8 @@
 package io.voxkit.socketio.client.parser
 
-import kotlinx.coroutines.channels.Channel
-
 internal interface Parser {
-    val decodedPackets: Channel<Packet>
-
     fun encode(packet: Packet): Encoded
-    suspend fun decode(data: Encoded): Decoded
+    fun decode(encoded: Encoded, partial: Decoded.Partial? = null): Decoded
 
     sealed interface Encoded {
         data class Text(val data: String) : Encoded

@@ -1,16 +1,13 @@
 package io.voxkit.socketio.client.parser
 
 import io.ktor.utils.io.core.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-internal class ParserImpl : Parser, AutoCloseable {
-    override val decodedPackets: Channel<Packet>
-        get() = TODO("Not yet implemented")
-
+internal class ParserImpl : Parser {
     override fun encode(packet: Packet): Parser.Encoded {
         return when (packet.type) {
             Packet.Type.BINARY_EVENT, Packet.Type.BINARY_ACK -> Parser.Encoded.Binary(encodeAsBinary(packet))
@@ -48,7 +45,7 @@ internal class ParserImpl : Parser, AutoCloseable {
 
             // JSON-stringified payload without binary
             dataWithPlaceholders?.let { elements ->
-                if (elements.size == 1) {
+                if (elements.size == 1 && elements[0] !is JsonPrimitive) {
                     append(Json.encodeToString(elements[0]))
                 } else {
                     append(Json.encodeToString(elements))
@@ -59,8 +56,6 @@ internal class ParserImpl : Parser, AutoCloseable {
 
     private fun toJsonElement(placeholderIndex: () -> Int, data: Packet.Data): JsonElement {
         return when (data) {
-            is Packet.Data.Json -> data.element
-
             is Packet.Data.Binary -> {
                 JsonObject(
                     mapOf(
@@ -69,14 +64,110 @@ internal class ParserImpl : Parser, AutoCloseable {
                     )
                 )
             }
+
+            is Packet.Data.Json -> data.element
         }
     }
 
-    override suspend fun decode(data: Parser.Encoded): Parser.Decoded {
-        TODO("Not yet implemented")
+    override fun decode(encoded: Parser.Encoded, partial: Parser.Decoded.Partial?): Parser.Decoded {
+        return when (encoded) {
+            is Parser.Encoded.Binary -> TODO()
+
+            is Parser.Encoded.Text -> {
+                check(partial == null) { "Unexpected packet order: TEXT packet, but partial is not null" }
+                Parser.Decoded.Completed(decodeText(encoded.data))
+            }
+        }
     }
 
-    override fun close() {
-        decodedPackets.close()
+    private fun decodeText(text: String): Packet {
+        require(text.isNotEmpty()) { "Empty data string" }
+
+        val packetType = text[0].digitToIntOrNull()
+        require(packetType != null && packetType in 0..Packet.Type.entries.size) { "Invalid packet type: ${text[0]}" }
+
+        val type = Packet.Type.entries[packetType]
+        val (_, attachmentsCount, namespace, ackId, payload) = decodeNextToken(PacketParts(text.drop(1)))
+        if (type == Packet.Type.BINARY_EVENT || type == Packet.Type.BINARY_ACK) {
+            require(attachmentsCount != null) { "Missing attachments count for binary packet" }
+        }
+
+        val jsonElement = payload?.let { JSON.decodeFromString<JsonElement>(it) }
+        require(jsonElement == null || jsonElement is JsonObject || jsonElement is JsonArray) { "Invalid JSON payload: $payload" }
+
+        val packetData = when (jsonElement) {
+            is JsonObject -> listOf(Packet.Data.Json(jsonElement))
+            is JsonArray -> jsonElement.map { Packet.Data.Json(it) }
+            null -> null
+            else -> error("Invalid JSON data type")
+        }
+
+        return Packet(type = type, namespace = namespace ?: "/", data = packetData, ackId = ackId)
+    }
+
+    private fun decodeNextToken(parts: PacketParts, token: Token? = Token.ATTACHMENT_COUNT): PacketParts {
+        token ?: return parts
+
+        val packetParts = when (token) {
+            Token.ATTACHMENT_COUNT -> decodeAttachmentToken(parts)
+            Token.NAMESPACE -> decodeNamespaceToken(parts)
+            Token.ACK_ID -> decodeAckId(parts)
+            Token.PAYLOAD -> parts.copy(payload = parts.text.takeIf { it.isNotEmpty() })
+        }
+
+        return decodeNextToken(packetParts, token.next)
+    }
+
+    private fun decodeAttachmentToken(tokens: PacketParts): PacketParts {
+        val terminatorIdx = tokens.text.indexOf('-')
+        if (terminatorIdx == -1) return tokens
+        val tok = tokens.text.substring(0, terminatorIdx)
+        val attachmentsCount = tok.toIntOrNull() ?: return tokens
+        return tokens.copy(
+            text = tokens.text.substring(terminatorIdx + 1),
+            attachmentsCount = attachmentsCount
+        )
+    }
+
+    private fun decodeNamespaceToken(tokens: PacketParts): PacketParts {
+        if (tokens.text.startsWith("/").not()) return tokens
+        return tokens.copy(
+            text = tokens.text.substringAfter(","),
+            namespace = tokens.text.substringBefore(","),
+        )
+    }
+
+    private fun decodeAckId(tokens: PacketParts): PacketParts {
+        val tok = tokens.text.takeWhile { it.isDigit() }
+        if (tok.isEmpty()) return tokens
+        val ackId = tok.toInt()
+        return tokens.copy(text = tokens.text.substringAfter(tok), ackId = ackId)
+    }
+
+    private data class PacketParts(
+        val text: String,
+        val attachmentsCount: Int? = null,
+        val namespace: String? = null,
+        val ackId: Int? = null,
+        val payload: String? = null,
+    )
+
+    private enum class Token {
+        ATTACHMENT_COUNT, NAMESPACE, ACK_ID, PAYLOAD;
+
+        val next: Token?
+            get() = when (this) {
+                ATTACHMENT_COUNT -> NAMESPACE
+                NAMESPACE -> ACK_ID
+                ACK_ID -> PAYLOAD
+                PAYLOAD -> null
+            }
+    }
+
+    companion object {
+        val JSON = Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = true
+        }
     }
 }

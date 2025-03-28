@@ -11,7 +11,7 @@ class ParserTest {
     fun testEncodingTextData() {
         val parser = ParserImpl()
 
-        val testPackets = listOf(
+        val testCases = listOf(
             Triple(
                 Packet(Packet.Type.CONNECT),
                 Parser.Encoded.Text("0"),
@@ -33,28 +33,28 @@ class ParserTest {
                 "Failed to encode DISCONNECT packet"
             ),
             Triple(
-                Packet(Packet.Type.EVENT, data = listOf(listOf("foo").asPacketData())),
+                Packet(Packet.Type.EVENT, data = listOf("foo".asPacketData())),
                 Parser.Encoded.Text("""2["foo"]"""),
                 "Failed to encode EVENT packet with data"
             ),
             Triple(
-                Packet(Packet.Type.EVENT, "/admin", data = listOf(listOf("bar").asPacketData())),
+                Packet(Packet.Type.EVENT, "/admin", data = listOf("bar".asPacketData())),
                 Parser.Encoded.Text("""2/admin,["bar"]"""),
                 """Failed to encode EVENT packet with "/admin" namespace and data"""
             ),
             Triple(
-                Packet(Packet.Type.EVENT, data = listOf(listOf("foo").asPacketData()), ackId = 12),
+                Packet(Packet.Type.EVENT, data = listOf("foo".asPacketData()), ackId = 12),
                 Parser.Encoded.Text("""212["foo"]"""),
                 "Failed to encode EVENT packet with acknowledgment ID"
             ),
             Triple(
-                Packet(Packet.Type.ACK, "/admin", data = listOf(listOf("bar").asPacketData()), ackId = 13),
+                Packet(Packet.Type.ACK, "/admin", data = listOf("bar".asPacketData()), ackId = 13),
                 Parser.Encoded.Text("""3/admin,13["bar"]"""),
                 "Failed to encode ACK packet with acknowledgment ID"
             ),
         )
 
-        for ((packet, expected, message) in testPackets) {
+        for ((packet, expected, message) in testCases) {
             assertEquals(expected, parser.encode(packet), message)
         }
     }
@@ -63,7 +63,7 @@ class ParserTest {
     fun testEncodingBinaryData() {
         val parser = ParserImpl()
 
-        val testPackets = listOf(
+        val testCases = listOf(
             Triple(
                 Packet(
                     Packet.Type.BINARY_EVENT,
@@ -112,7 +112,7 @@ class ParserTest {
             ),
         )
 
-        for ((packet, expected, message) in testPackets) {
+        for ((packet, expected, message) in testCases) {
             val encoded = parser.encode(packet)
             assertIs<Parser.Encoded.Binary>(encoded)
             assertEquals(expected[0] as String, encoded.data[0].decodeToString(), message)
@@ -121,6 +121,105 @@ class ParserTest {
             }
         }
     }
+
+    @Test
+    fun testDecodingTextData() {
+        val parser = ParserImpl()
+
+        val testCases = listOf(
+            Triple(
+                Parser.Encoded.Text("0"),
+                Packet(Packet.Type.CONNECT),
+                "Failed to decode CONNECT packet"
+            ),
+            Triple(
+                Parser.Encoded.Text("""0/admin,{"sid":"oSO0OpakMV_3jnilAAAA"}"""),
+                Packet(Packet.Type.CONNECT, "/admin", data = listOf(Sid().asPacketData())),
+                """Failed to decode CONNECT packet with namespace "/admin" and data"""
+            ),
+            Triple(
+                Parser.Encoded.Text("""4{"message":"Not authorized"}"""),
+                Packet(Packet.Type.CONNECT_ERROR, data = listOf(ConnectError().asPacketData())),
+                """Failed to decode CONNECT_ERROR packet with data"""
+            ),
+            Triple(
+                Parser.Encoded.Text("1"),
+                Packet(Packet.Type.DISCONNECT),
+                "Failed to decode DISCONNECT packet"
+            ),
+            Triple(
+                Parser.Encoded.Text("""2["foo"]"""),
+                Packet(Packet.Type.EVENT, data = listOf("foo".asPacketData())),
+                "Failed to decode EVENT packet with data"
+            ),
+            Triple(
+                Parser.Encoded.Text("""2/admin,["bar"]"""),
+                Packet(Packet.Type.EVENT, "/admin", data = listOf("bar".asPacketData())),
+                """Failed to decode EVENT packet with "/admin" namespace and data"""
+            ),
+            Triple(
+                Parser.Encoded.Text("""212["foo"]"""),
+                Packet(Packet.Type.EVENT, data = listOf("foo".asPacketData()), ackId = 12),
+                "Failed to decode EVENT packet with acknowledgment ID"
+            ),
+            Triple(
+                Parser.Encoded.Text("""3/admin,13["bar"]"""),
+                Packet(Packet.Type.ACK, "/admin", data = listOf("bar".asPacketData()), ackId = 13),
+                "Failed to decode ACK packet with acknowledgment ID"
+            )
+        )
+
+        for ((encoded, expected, message) in testCases) {
+            val decoded = parser.decode(encoded)
+            assertIs<Parser.Decoded.Completed>(decoded, message)
+            assertEquals(expected, decoded.packet, message)
+        }
+    }
+
+//    @Test
+//    fun testDecodingBinaryData() {
+//        val parser = ParserImpl()
+//
+//        // Test binary event
+//        val binaryEventEncoded = Parser.Encoded.Text("""51-["baz",{"_placeholder":true,"num":0}]""")
+//        val binaryData = byteArrayOf(1, 2, 3, 4)
+//
+//        val decoded = parser.decode(binaryEventEncoded)
+//        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+//        assertEquals(1, decoded.buffers.size, "Should require 1 buffer")
+//
+//        val completed = parser.decode(Parser.Encoded.Binary(listOf(binaryData)))
+//        assertIs<Parser.Decoded.Completed>(completed, "Should complete after receiving binary data")
+//        assertEquals(
+//            Packet(
+//                Packet.Type.BINARY_EVENT,
+//                data = listOf("baz".asPacketData(), binaryData.asPacketData())
+//            ),
+//            completed.packet,
+//            "Failed to decode BINARY_EVENT packet"
+//        )
+//
+//        // Test binary ack with multiple attachments
+//        val binaryAckEncoded = Parser.Encoded.Text("""61-15["bar",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""")
+//        val buffer1 = byteArrayOf(1, 2, 3)
+//        val buffer2 = byteArrayOf(4, 5, 6)
+//
+//        val decodedAck = parser.decode(binaryAckEncoded)
+//        assertIs<Parser.Decoded.Partial>(decodedAck, "Should decode as partial packet")
+//        assertEquals(2, decodedAck.buffers.size, "Should require 2 buffers")
+//
+//        val completedAck = parser.decode(Parser.Encoded.Binary(listOf(buffer1, buffer2)))
+//        assertIs<Parser.Decoded.Completed>(completedAck, "Should complete after receiving binary data")
+//        assertEquals(
+//            Packet(
+//                Packet.Type.BINARY_ACK,
+//                ackId = 15,
+//                data = listOf("bar".asPacketData(), buffer1.asPacketData(), buffer2.asPacketData())
+//            ),
+//            completedAck.packet,
+//            "Failed to decode BINARY_ACK packet with multiple attachments"
+//        )
+//    }
 }
 
 @Serializable

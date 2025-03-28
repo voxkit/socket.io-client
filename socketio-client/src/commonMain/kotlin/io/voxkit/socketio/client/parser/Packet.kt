@@ -1,6 +1,5 @@
 package io.voxkit.socketio.client.parser
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 
@@ -38,18 +37,11 @@ internal data class Packet(
             }
         }
     }
-
-    companion object {
-        val JSON = Json {
-            encodeDefaults = true
-            ignoreUnknownKeys = true
-        }
-    }
 }
 
 internal inline fun <reified T> T.asPacketData(): Packet.Data {
     return when (this) {
         is ByteArray -> Packet.Data.Binary(this)
-        else -> Packet.Data.Json(Packet.JSON.encodeToJsonElement(this))
+        else -> Packet.Data.Json(ParserImpl.JSON.encodeToJsonElement(this))
     }
 }
