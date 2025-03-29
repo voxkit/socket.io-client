@@ -1,6 +1,8 @@
 package io.voxkit.socketio.client.parser
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
 
 internal data class Packet(
@@ -45,3 +47,10 @@ internal inline fun <reified T> T.asPacketData(): Packet.Data {
         else -> Packet.Data.Json(ParserImpl.JSON.encodeToJsonElement(this))
     }
 }
+
+internal val Packet.placeholdersCount: Int
+    get() = data?.count {
+        val jsonElement = (it as? Packet.Data.Json)?.element
+        val jsonObject = (jsonElement as? JsonObject)
+        jsonObject?.get("_placeholder") == JsonPrimitive(true)
+    } ?: 0

@@ -2,7 +2,8 @@ package io.voxkit.socketio.client.parser
 
 internal interface Parser {
     fun encode(packet: Packet): Encoded
-    fun decode(encoded: Encoded, partial: Decoded.Partial? = null): Decoded
+    fun decode(text: String): Packet
+    fun decode(bytes: ByteArray, partial: Decoded.Partial? = null): Decoded
 
     sealed interface Encoded {
         data class Text(val data: String) : Encoded
@@ -11,6 +12,6 @@ internal interface Parser {
 
     sealed interface Decoded {
         data class Completed(val packet: Packet) : Decoded
-        data class Partial(val packet: Packet, val buffers: List<ByteArray>) : Decoded
+        data class Partial(val packet: Packet) : Decoded
     }
 }

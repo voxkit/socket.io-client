@@ -69,14 +69,30 @@ internal class ParserImpl : Parser {
         }
     }
 
-    override fun decode(encoded: Parser.Encoded, partial: Parser.Decoded.Partial?): Parser.Decoded {
-        return when (encoded) {
-            is Parser.Encoded.Binary -> TODO()
+    override fun decode(text: String): Packet = decodeText(text)
 
-            is Parser.Encoded.Text -> {
-                check(partial == null) { "Unexpected packet order: TEXT packet, but partial is not null" }
-                Parser.Decoded.Completed(decodeText(encoded.data))
+    override fun decode(bytes: ByteArray, partial: Parser.Decoded.Partial?): Parser.Decoded {
+        return if (partial == null) {
+            val packet = decodeText(bytes.decodeToString())
+            require(packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
+                "Invalid packet type for binary data: ${packet.type}"
             }
+            return Parser.Decoded.Partial(packet)
+        } else {
+            val placeholdersCount = partial.packet.placeholdersCount
+            require(placeholdersCount > 0) { "No placeholders found in the packet for binary data" }
+            val packet = partial.packet.copy(data = replacePlaceholder(partial.packet.data, bytes))
+            if (placeholdersCount == 1) {
+                Parser.Decoded.Completed(packet)
+            } else {
+                Parser.Decoded.Partial(packet)
+            }
+        }
+    }
+
+    private fun replacePlaceholder(data: List<Packet.Data>?, bytes: ByteArray): List<Packet.Data>? {
+        return data?.map { el ->
+            if (el is Packet.Data.Json && el.element.isAttachmentPlaceholder) Packet.Data.Binary(bytes) else el
         }
     }
 
