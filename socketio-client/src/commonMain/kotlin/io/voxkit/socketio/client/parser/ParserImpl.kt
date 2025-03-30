@@ -72,28 +72,41 @@ internal class ParserImpl : Parser {
     override fun decode(text: String): Packet = decodeText(text)
 
     override fun decode(bytes: ByteArray, partial: Parser.Decoded.Partial?): Parser.Decoded {
-        return if (partial == null) {
-            val packet = decodeText(bytes.decodeToString())
-            require(packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
-                "Invalid packet type for binary data: ${packet.type}"
-            }
-            return Parser.Decoded.Partial(packet)
+        return if (partial == null) decodeFirstChunk(bytes) else decodeNextChunk(partial, bytes)
+    }
+
+    private fun decodeFirstChunk(bytes: ByteArray): Parser.Decoded.Partial {
+        val packet = decodeText(bytes.decodeToString())
+        require(packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
+            "Invalid packet type for binary data: ${packet.type}"
+        }
+        return Parser.Decoded.Partial(packet)
+    }
+
+    private fun decodeNextChunk(partial: Parser.Decoded.Partial, bytes: ByteArray): Parser.Decoded {
+        val placeholdersCount = partial.packet.placeholdersCount
+        require(placeholdersCount > 0) { "No placeholders found in the packet for binary data" }
+        val packet = partial.packet.copy(data = replacePlaceholder(partial.packet.data, bytes))
+        return if (placeholdersCount == 1) {
+            Parser.Decoded.Completed(packet)
         } else {
-            val placeholdersCount = partial.packet.placeholdersCount
-            require(placeholdersCount > 0) { "No placeholders found in the packet for binary data" }
-            val packet = partial.packet.copy(data = replacePlaceholder(partial.packet.data, bytes))
-            if (placeholdersCount == 1) {
-                Parser.Decoded.Completed(packet)
-            } else {
-                Parser.Decoded.Partial(packet)
-            }
+            Parser.Decoded.Partial(packet)
         }
     }
 
     private fun replacePlaceholder(data: List<Packet.Data>?, bytes: ByteArray): List<Packet.Data>? {
-        return data?.map { el ->
-            if (el is Packet.Data.Json && el.element.isAttachmentPlaceholder) Packet.Data.Binary(bytes) else el
+        data ?: return data
+        val newData = data.toMutableList()
+
+        repeat(newData.size) { i ->
+            val el = newData[i]
+            if (el is Packet.Data.Json && el.element.isAttachmentPlaceholder) {
+                newData[i] = Packet.Data.Binary(bytes)
+                return newData
+            }
         }
+
+        return newData
     }
 
     private fun decodeText(text: String): Packet {

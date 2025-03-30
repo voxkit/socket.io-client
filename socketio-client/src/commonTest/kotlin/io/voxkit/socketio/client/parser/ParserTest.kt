@@ -177,7 +177,7 @@ class ParserTest {
     }
 
     @Test
-    fun testDecodingBinaryData() {
+    fun testDecodingBinaryEvent() {
         val parser = ParserImpl()
 
         // Test binary event
@@ -188,12 +188,93 @@ class ParserTest {
 
         var decoded = parser.decode(binaryData[0])
         assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+
         decoded = parser.decode(binaryData[1], decoded)
         assertIs<Parser.Decoded.Completed>(decoded, "Should complete after receiving binary data")
+
         assertEquals(
             Packet(
                 Packet.Type.BINARY_EVENT,
                 data = listOf("baz".asPacketData(), byteArrayOf(1, 2, 3, 4).asPacketData())
+            ),
+            decoded.packet
+        )
+
+        // Test binary event with multiple attachments
+        val binaryDataMultiple = listOf(
+            """52-/admin,["baz",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""".toByteArray(),
+            byteArrayOf(1, 2),
+            byteArrayOf(3, 4)
+        )
+
+        decoded = parser.decode(binaryDataMultiple[0])
+
+        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+
+        decoded = parser.decode(binaryDataMultiple[1], decoded)
+        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+
+        decoded = parser.decode(binaryDataMultiple[2], decoded)
+        assertIs<Parser.Decoded.Completed>(decoded, "Should complete after receiving binary data")
+
+        assertEquals(
+            Packet(
+                Packet.Type.BINARY_EVENT,
+                namespace = "/admin",
+                data = listOf(
+                    "baz".asPacketData(),
+                    byteArrayOf(1, 2).asPacketData(),
+                    byteArrayOf(3, 4).asPacketData()
+                )
+            ),
+            decoded.packet
+        )
+    }
+
+    @Test
+    fun testDecodingBinaryAck() {
+        val parser = ParserImpl()
+
+        // Test binary ack
+        val binaryData = listOf(
+            """61-15["bar",{"_placeholder":true,"num":0}]""".toByteArray(),
+            byteArrayOf(1, 2, 3, 4)
+        )
+
+        var decoded = parser.decode(binaryData[0])
+        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+        decoded = parser.decode(binaryData[1], decoded)
+        assertIs<Parser.Decoded.Completed>(decoded, "Should complete after receiving binary data")
+        assertEquals(
+            Packet(
+                Packet.Type.BINARY_ACK,
+                data = listOf("bar".asPacketData(), byteArrayOf(1, 2, 3, 4).asPacketData()),
+                ackId = 15
+            ),
+            decoded.packet
+        )
+
+        // Test binary ack with multiple attachments
+        val binaryDataMultiple = listOf(
+            """61-15["bar",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""".toByteArray(),
+            byteArrayOf(1, 2),
+            byteArrayOf(3, 4)
+        )
+
+        decoded = parser.decode(binaryDataMultiple[0])
+        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+
+        decoded = parser.decode(binaryDataMultiple[1], decoded)
+        assertIs<Parser.Decoded.Partial>(decoded, "Should decode as partial packet")
+
+        decoded = parser.decode(binaryDataMultiple[2], decoded)
+        assertIs<Parser.Decoded.Completed>(decoded, "Should complete after receiving binary data")
+
+        assertEquals(
+            Packet(
+                Packet.Type.BINARY_ACK,
+                data = listOf("bar".asPacketData(), byteArrayOf(1, 2).asPacketData(), byteArrayOf(3, 4).asPacketData()),
+                ackId = 15
             ),
             decoded.packet
         )
