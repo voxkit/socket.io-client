@@ -7,10 +7,10 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class ParserTest {
+class DefaultParserTest {
     @Test
     fun testEncodingTextData() {
-        val parser = ParserImpl()
+        val parser = DefaultParser()
 
         val testCases = listOf(
             Triple(
@@ -62,7 +62,7 @@ class ParserTest {
 
     @Test
     fun testEncodingBinaryData() {
-        val parser = ParserImpl()
+        val parser = DefaultParser()
 
         val testCases = listOf(
             Triple(
@@ -125,7 +125,7 @@ class ParserTest {
 
     @Test
     fun testDecodingTextData() {
-        val parser = ParserImpl()
+        val parser = DefaultParser()
 
         val testCases = listOf(
             Triple(
@@ -178,7 +178,7 @@ class ParserTest {
 
     @Test
     fun testDecodingBinaryEvent() {
-        val parser = ParserImpl()
+        val parser = DefaultParser()
 
         // Test binary event
         val binaryData = listOf(
@@ -233,7 +233,7 @@ class ParserTest {
 
     @Test
     fun testDecodingBinaryAck() {
-        val parser = ParserImpl()
+        val parser = DefaultParser()
 
         // Test binary ack
         val binaryData = listOf(

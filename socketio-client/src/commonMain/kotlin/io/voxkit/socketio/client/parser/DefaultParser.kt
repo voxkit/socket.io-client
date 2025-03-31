@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * This implementation handles both text and binary packets.
  * @see https://socket.io/docs/v4/socket-io-protocol/#format
  */
-internal class ParserImpl : Parser {
+internal class DefaultParser : Parser {
     override fun encode(packet: Packet): Parser.Encoded {
         return when (packet.type) {
             Packet.Type.BINARY_EVENT, Packet.Type.BINARY_ACK -> Parser.Encoded.Binary(encodeAsBinary(packet))

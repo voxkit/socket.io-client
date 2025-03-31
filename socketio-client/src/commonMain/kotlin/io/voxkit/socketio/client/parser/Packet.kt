@@ -42,7 +42,7 @@ internal data class Packet(
 internal inline fun <reified T> T.asPacketData(): Packet.Data {
     return when (this) {
         is ByteArray -> Packet.Data.Binary(this)
-        else -> Packet.Data.Json(ParserImpl.JSON.encodeToJsonElement(this))
+        else -> Packet.Data.Json(DefaultParser.JSON.encodeToJsonElement(this))
     }
 }
 
