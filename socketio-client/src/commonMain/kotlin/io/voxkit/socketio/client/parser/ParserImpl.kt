@@ -7,6 +7,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
+/**
+ * Parser implementation for encoding and decoding Socket.IO packets.
+ * This implementation handles both text and binary packets.
+ * @see https://socket.io/docs/v4/socket-io-protocol/#format
+ */
 internal class ParserImpl : Parser {
     override fun encode(packet: Packet): Parser.Encoded {
         return when (packet.type) {
