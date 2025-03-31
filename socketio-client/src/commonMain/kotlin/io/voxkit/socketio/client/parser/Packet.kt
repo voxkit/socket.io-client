@@ -3,13 +3,13 @@ package io.voxkit.socketio.client.parser
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 
-internal data class Packet(
+public data class Packet(
     val type: Type,
     val namespace: String = "/",
     val data: List<Data>? = null,
     val ackId: Int? = null,
 ) {
-    enum class Type {
+    public enum class Type {
         CONNECT,
         DISCONNECT,
         EVENT,
@@ -19,10 +19,10 @@ internal data class Packet(
         BINARY_ACK,
     }
 
-    sealed interface Data {
-        data class Json(val element: JsonElement) : Data
+    public sealed interface Data {
+        public data class Json(val element: JsonElement) : Data
 
-        data class Binary(val buffer: ByteArray) : Data {
+        public data class Binary(val buffer: ByteArray) : Data {
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true
                 if (other !is Binary) return false
