@@ -50,7 +50,7 @@ internal class ManagerImpl(
     var recovered: Boolean = false
         private set
 
-    private val logger = Logger(loggerConfig, "Manager")
+    private val logger = Logger(loggerConfig, "Manager @ ${hashCode()}")
     private val parser = DefaultParser()
 
     private var reconnectionAttemptCount = 0

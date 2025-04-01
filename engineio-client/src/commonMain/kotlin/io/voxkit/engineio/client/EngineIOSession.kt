@@ -1,6 +1,5 @@
 package io.voxkit.engineio.client
 
-import co.touchlab.kermit.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.http.*
@@ -106,19 +105,16 @@ public suspend fun HttpClient.engineIOSession(block: EngineIOOptionsBuilder.() -
 }
 
 private suspend fun HttpClient.engineIOSession(options: EngineIOOptions): EngineIOSession {
-    val logger = Logger(options.loggerConfig, "EngineIO")
     val transportType = selectTransportType(options)
-    val transport = createTransport(logger, transportType, options)
+    val transport = createTransport(transportType, options)
     val handshakePacket = transport.incoming.receive()
-    return EngineIOSessionImpl(logger, transport, options, handshakePacket, httpClient = this)
+    return EngineIOSessionImpl(options.loggerConfig, transport, options, handshakePacket, httpClient = this)
 }
 
 private suspend fun HttpClient.createTransport(
-    logger: Logger,
     transportType: TransportType,
     options: EngineIOOptions
 ): Transport {
-    logger.v { "create transport '${transportType}'" }
     return when (transportType) {
         TransportType.POLLING -> pollingTransport(options)
         TransportType.WEBSOCKET -> webSocketTransport(options)

@@ -52,8 +52,9 @@ internal class SocketImpl(
     private val _events = MutableSharedFlow<Event>()
     override val events: Flow<Event> = _events.asSharedFlow()
 
-    // TODO: atomic
     private val logger = Logger(loggerConfig, "SocketIO: $namespace")
+
+    // TODO: atomic
     private var ackId = 0
     private val incoming = manager.incoming.filter { it.namespace == namespace }
     private val outgoing = Channel<Packet>(capacity = Channel.UNLIMITED)

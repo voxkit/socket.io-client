@@ -44,7 +44,7 @@ internal class PollingTransport(
     private val _call = MutableStateFlow<HttpClientCall?>(null)
     override val call: StateFlow<HttpClientCall?> = _call.asStateFlow()
 
-    private val logger = Logger(options.loggerConfig, "PollingTransport")
+    private val logger = Logger(options.loggerConfig, "PollingTransport @ ${hashCode()}")
     private val state = MutableStateFlow(State.RUNNING)
     private var sid: String? = null
 
@@ -58,8 +58,11 @@ internal class PollingTransport(
 
     private suspend fun poll() {
         try {
-            while (true) {
-                state.first { it == State.RUNNING }
+            while (state.value != State.CLOSED) {
+                state.first { it == State.RUNNING || it == State.CLOSED }
+
+                if (state.value == State.CLOSED) break
+
                 runCatching {
                     val response = httpClient.get { options.buildRequest(TransportType.POLLING, sid, builder = this) }
                     _call.value = response.call
@@ -91,6 +94,7 @@ internal class PollingTransport(
             }
         } finally {
             _incoming.cancel()
+            scope.cancel()
         }
     }
 
@@ -135,7 +139,7 @@ internal class PollingTransport(
     override fun close() {
         if (state.value == State.CLOSED) return
         state.value = State.CLOSED
-        scope.cancel()
+        _incoming.cancel()
         logger.d { "Transport $type closed." }
     }
 

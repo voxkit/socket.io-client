@@ -15,10 +15,10 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid: String? = null): Transport {
-    val logger = Logger(options.loggerConfig, "WebSocketTransport")
     val incomingPackets = Channel<Packet>()
 
     val webSocketSession = runCatching {
@@ -26,6 +26,9 @@ internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid
     }
         .onFailure { incomingPackets.cancel() }
         .getOrThrow()
+
+    val logger = Logger(options.loggerConfig, "WebSocketTransport @ ${webSocketSession.hashCode()}")
+    logger.v { "WebSocket transport stared." }
 
     webSocketSession.launch {
         try {
@@ -49,7 +52,7 @@ internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid
                 }
             }
         } catch (e: ClosedReceiveChannelException) {
-            logger.v { "WebSocket session closed: ${webSocketSession.closeReason.await()}" }
+            logger.d { "WebSocket transport closed: ${webSocketSession.closeReason.await()}" }
             incomingPackets.send(Packet.Close)
             incomingPackets.cancel()
         }

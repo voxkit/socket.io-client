@@ -1,6 +1,7 @@
 package io.voxkit.engineio.client
 
 import co.touchlab.kermit.Logger
+import co.touchlab.kermit.LoggerConfig
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.voxkit.engineio.client.EngineIOSession.State
@@ -33,7 +34,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 internal class EngineIOSessionImpl(
-    private val logger: Logger,
+    loggerConfig: LoggerConfig,
     initialTransport: Transport,
     private val options: EngineIOOptions,
     private val handshakePacket: Packet,
@@ -45,9 +46,10 @@ internal class EngineIOSessionImpl(
     private val _incoming: Channel<Packet>
     override val incoming: ReceiveChannel<Packet> get() = _incoming
 
-    private val _state = MutableStateFlow<State>(State.Open)
+    private val _state = MutableStateFlow<State>(State.Opening)
     override val state: StateFlow<State> = _state
 
+    private val logger = Logger(loggerConfig, "EngineIO @ ${hashCode()}")
     private val upgrades = (handshakePacket as? Packet.Open)?.upgrades ?: emptyList()
     private var transport = MutableStateFlow(initialTransport)
     private var pingTimeoutJob: Job? = null
@@ -75,7 +77,7 @@ internal class EngineIOSessionImpl(
     }
 
     private fun startSession(transport: Transport) {
-        logger.d { "start Engin.IO socket session, handshake data: $handshakePacket" }
+        logger.d { "Start Engin.IO socket session, handshake data: $handshakePacket" }
         receivePackets(transport)
         onHeartbeat()
 
@@ -121,14 +123,14 @@ internal class EngineIOSessionImpl(
         val webSocketTransport = httpClient.webSocketTransport(options, sid = id)
 
         // Send a ping packet with the string "probe" in the payload
-        logger.v { "client ==> server: probe" }
+        logger.v { "client ==> server: upgrade probe" }
         webSocketTransport.send(Packet.Ping("probe"))
 
         // Wait for a pong packet with the string "probe" in the payload
         for (packet in webSocketTransport.incoming) {
             if (packet is Packet.Pong && packet.data() == "probe") break
         }
-        logger.v { "client <== server: probe" }
+        logger.v { "client <== server: upgrade probe" }
 
         // Switch to the WebSocket transport
         transport.value = webSocketTransport
@@ -147,10 +149,13 @@ internal class EngineIOSessionImpl(
 
     private fun receivePackets(transport: Transport) {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            logger.d { "Start receiving packets from transport: ${transport.type}" }
+            logger.v { "Start receiving packets from transport: ${transport.type}" }
             while (true) {
                 runCatching { transport.incoming.receive() }
-                    .onSuccess { onPacket(it) }
+                    .onSuccess { packet ->
+                        logger.v { "client <== server [${transport.type}]: $packet" }
+                        onPacket(packet)
+                    }
                     .onFailure { e ->
                         if (this@EngineIOSessionImpl.transport == transport) {
                             onError(EngineIoException("Transport error [${transport.type}]", cause = e))
@@ -161,7 +166,6 @@ internal class EngineIOSessionImpl(
     }
 
     private suspend fun onPacket(packet: Packet) {
-        logger.v { "client <== server: $packet" }
         onHeartbeat()
 
         when (packet) {
@@ -186,19 +190,22 @@ internal class EngineIOSessionImpl(
     }
 
     private suspend fun sendPacket(packet: Packet) {
-        logger.v { "client ==> server: $packet" }
 
-        when (state.value) {
+        when (_state.value) {
             State.Opening, State.Upgrading -> {
-                logger.v { "Socket is not ready, waiting for OPEN state" }
-                state.first { it == State.Open }
-                logger.v { "Socket is in OPEN state" }
+                logger.v { "client ==> server: Engine.IO is not ready, waiting for OPEN state" }
+                _state.first { it == State.Open }
+                logger.v { "client ==> server: Engine.IO is ready" }
             }
 
             State.Open -> Unit // Socket is already open
             is State.Closing, is State.Closed -> throw EngineIOSocketClosedException()
         }
-        runCatching { transport.value.send(packet) }
+        runCatching {
+            val currentTransport = transport.value
+            logger.v { "client ==> server [${currentTransport.type}]: $packet" }
+            currentTransport.send(packet)
+        }
             .onFailure { onError(EngineIoException("Transport error", cause = it)) }
             .getOrThrow()
     }
@@ -231,7 +238,7 @@ internal class EngineIOSessionImpl(
         _incoming.cancel()
 
         scope.launch {
-            if (reason == "io server disconnect") runCatching { sendPacket(Packet.Close) }
+            if (reason == "io client disconnect") runCatching { sendPacket(Packet.Close) }
             _state.value = State.Closed(reason, cause)
             transport.value.close()
             scope.cancel(reason, cause)

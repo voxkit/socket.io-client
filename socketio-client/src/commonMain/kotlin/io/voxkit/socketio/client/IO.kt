@@ -10,11 +10,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-public fun io(block: IOFactoryOptionsBuilder.() -> Unit = {}): IOFactory {
-    return IOFactory(IOFactoryOptionsBuilder().apply(block).build())
+public fun IO(block: IOFactoryOptionsBuilder.() -> Unit = {}): IO {
+    return IO(IOFactoryOptionsBuilder().apply(block).build())
 }
 
-public class IOFactory internal constructor(private val factoryOptions: IOFactoryOptions) : AutoCloseable {
+public class IO internal constructor(private val factoryOptions: IOFactoryOptions) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + factoryOptions.dispatcher + CoroutineName("Socket.IO"))
     private var defaultManager: Manager? = null
 
