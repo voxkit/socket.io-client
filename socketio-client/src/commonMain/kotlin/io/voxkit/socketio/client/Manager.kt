@@ -63,4 +63,10 @@ public interface Manager {
          */
         public data object ReconnectionFailed : Event
     }
+
+    public sealed interface State {
+        public data object Connecting : State
+        public data object Connected : State
+        public data class Disconnected(val reason: String, val cause: Throwable?) : State
+    }
 }

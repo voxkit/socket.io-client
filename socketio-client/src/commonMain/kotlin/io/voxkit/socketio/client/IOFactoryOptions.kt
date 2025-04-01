@@ -1,6 +1,15 @@
 package io.voxkit.socketio.client
 
-public data class IOFactoryOptions(
+import co.touchlab.kermit.LoggerConfig
+import co.touchlab.kermit.Severity
+import co.touchlab.kermit.loggerConfigInit
+import co.touchlab.kermit.platformLogWriter
+import io.ktor.client.*
+import io.voxkit.engineio.client.engineIOHttpClient
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+
+public class IOFactoryOptionsBuilder {
     /**
      * Whether to create a new [Manager] instance.
      *
@@ -46,7 +55,33 @@ public data class IOFactoryOptions(
      * val socket3 = io("/admin") // reusing the 1st manager
      * val socket4 = io("/admin") // 3rd manager
      */
-    val forceNew: Boolean = false,
+    public var forceNew: Boolean = false
 
-    val managerOptions: ManagerOptions = ManagerOptions(),
+    /**
+     * The logger configuration.
+     * Touchlab Kermit logger is used.
+     *
+     * @see https://kermit.touchlab.co/docs/
+     */
+    public var loggerConfig: LoggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Error)
+
+    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
+
+    public var httpClient: HttpClient? = null
+
+    internal fun build(): IOFactoryOptions {
+        return IOFactoryOptions(
+            forceNew = forceNew,
+            loggerConfig = loggerConfig,
+            dispatcher = dispatcher,
+            httpClient = httpClient ?: engineIOHttpClient(),
+        )
+    }
+}
+
+internal data class IOFactoryOptions(
+    val forceNew: Boolean,
+    val loggerConfig: LoggerConfig,
+    val dispatcher: CoroutineDispatcher,
+    val httpClient: HttpClient,
 )

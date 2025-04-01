@@ -80,12 +80,10 @@ public class EngineIOOptionsBuilder {
     }
 }
 
-internal fun EngineIOOptionsBuilder(urlString: String): EngineIOOptionsBuilder {
-    val url = Url(urlString)
-
+internal fun EngineIOOptionsBuilder(url: Url): EngineIOOptionsBuilder {
     val transportSet = when {
-        urlString.startsWith("http") -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
-        urlString.startsWith("ws") -> setOf(TransportType.WEBSOCKET)
+        url.protocol.name.startsWith("http") -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
+        url.protocol.name.startsWith("ws") -> setOf(TransportType.WEBSOCKET)
         else -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
     }
 

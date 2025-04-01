@@ -3,6 +3,7 @@ package io.voxkit.engineio.client
 import co.touchlab.kermit.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.voxkit.engineio.client.EngineIOSession.State
 import io.voxkit.engineio.client.transports.PollingTransport
 import io.voxkit.engineio.client.transports.Transport
 import io.voxkit.engineio.client.transports.TransportType
@@ -44,8 +45,10 @@ internal class EngineIOSessionImpl(
     private val _incoming: Channel<Packet>
     override val incoming: ReceiveChannel<Packet> get() = _incoming
 
+    private val _state = MutableStateFlow<State>(State.Open)
+    override val state: StateFlow<State> = _state
+
     private val upgrades = (handshakePacket as? Packet.Open)?.upgrades ?: emptyList()
-    private val state = MutableStateFlow(State.OPENING)
     private var transport = MutableStateFlow(initialTransport)
     private var pingTimeoutJob: Job? = null
 
@@ -83,7 +86,7 @@ internal class EngineIOSessionImpl(
         ) {
             scope.launch { upgrade(transport) }
         } else {
-            state.value = State.OPEN
+            _state.value = State.Open
         }
     }
 
@@ -109,7 +112,7 @@ internal class EngineIOSessionImpl(
      */
     private suspend fun upgrade(pollingTransport: PollingTransport) {
         logger.d { "Upgrading transport to WebSocket" }
-        state.value = State.UPGRADING
+        _state.value = State.Upgrading
 
         // Pause the HTTP long-polling transport
         pollingTransport.pause()
@@ -134,7 +137,7 @@ internal class EngineIOSessionImpl(
         // Send an upgrade packet
         logger.v { "client ==> server: upgrade" }
         webSocketTransport.send(Packet.Upgrade)
-        state.value = State.OPEN
+        _state.value = State.Open
 
         // Close the HTTP long-polling transport
         pollingTransport.close()
@@ -162,10 +165,14 @@ internal class EngineIOSessionImpl(
         onHeartbeat()
 
         when (packet) {
-            is Packet.Ping -> runCatching { sendPacket(Packet.Pong()) }
+            is Packet.Ping -> runCatching {
+                sendPacket(Packet.Pong())
+                _incoming.send(packet)
+            }
+
             is Packet.Error -> onError(EngineIoException("Server error", code = packet.data))
             is Packet.Message, is Packet.Binary -> _incoming.send(packet)
-            is Packet.Close -> onClose("close by server")
+            is Packet.Close -> onClose("io server disconnect")
             else -> logger.w { "Unexpected packet type: $packet" }
         }
     }
@@ -182,22 +189,22 @@ internal class EngineIOSessionImpl(
         logger.v { "client ==> server: $packet" }
 
         when (state.value) {
-            State.OPENING, State.UPGRADING -> {
+            State.Opening, State.Upgrading -> {
                 logger.v { "Socket is not ready, waiting for OPEN state" }
-                state.first { it == State.OPEN }
+                state.first { it == State.Open }
                 logger.v { "Socket is in OPEN state" }
             }
 
-            State.OPEN -> Unit // Socket is already open
-            State.CLOSING, State.CLOSED -> throw EngineIOSocketClosedException()
+            State.Open -> Unit // Socket is already open
+            is State.Closing, is State.Closed -> throw EngineIOSocketClosedException()
         }
         runCatching { transport.value.send(packet) }
             .onFailure { onError(EngineIoException("Transport error", cause = it)) }
             .getOrThrow()
     }
 
-    override suspend fun close() {
-        onClose("close by client")
+    override fun close() {
+        onClose("io client disconnect")
     }
 
     private fun onHeartbeat() {
@@ -210,24 +217,24 @@ internal class EngineIOSessionImpl(
         }
     }
 
-    private suspend fun onError(exception: Exception) {
+    private fun onError(exception: Exception) {
         onClose("transport error", exception)
     }
 
-    private suspend fun onClose(reason: String, cause: Exception? = null) {
-        if (state.value in listOf(State.CLOSING, State.CLOSED)) return
-        state.value = State.CLOSING
+    private fun onClose(reason: String, cause: Exception? = null) {
+        if (state.value is State.Closing || state.value is State.Closed) return
+        _state.value = State.Closing(reason, cause)
 
         cause?.let { logger.w(it) { "Close Engine.IO socket session: $reason" } }
             ?: run { logger.d { "Close Engine.IO socket session: $reason" } }
 
         _incoming.cancel()
-        scope.cancel(reason, cause)
-        state.value = State.CLOSED
-        transport.value.close()
-    }
 
-    enum class State {
-        OPENING, UPGRADING, OPEN, CLOSING, CLOSED
+        scope.launch {
+            if (reason == "io server disconnect") runCatching { sendPacket(Packet.Close) }
+            _state.value = State.Closed(reason, cause)
+            transport.value.close()
+            scope.cancel(reason, cause)
+        }
     }
 }

@@ -40,9 +40,6 @@ kotlin {
 
         jvmMain {
             dependsOn(jvmAndAndroid)
-            dependencies {
-                implementation(libs.logback.classic)
-            }
         }
 
         androidMain {

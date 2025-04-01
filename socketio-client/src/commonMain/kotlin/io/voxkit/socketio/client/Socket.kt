@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client
 
+import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -8,7 +9,7 @@ import kotlinx.serialization.json.JsonObject
  * A Socket is the fundamental class for interacting with the server.
  * A Socket belongs to a certain Namespace (by default /) and uses an underlying [Manager] to communicate.
  */
-public interface Socket {
+public interface Socket : AutoCloseable {
     /**
      * Whether the socket will automatically try to reconnect.
      */
@@ -73,7 +74,7 @@ public interface Socket {
      * @param event The event name to send.
      * @param args The arguments to send with the event.
      */
-    public suspend fun send(event: String, vararg args: JsonObject)
+    public suspend fun send(event: String, vararg args: Packet.Data)
 
     /**
      * Sends an event to the socket and waits for an acknowledgment from the server.
@@ -82,7 +83,7 @@ public interface Socket {
      * @param args The arguments to send with the event.
      * @return A list of [JsonObject] received as acknowledgment from the server.
      */
-    public suspend fun sendWithAck(event: String, vararg args: JsonObject): List<JsonObject>
+    public suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data>
 
     /**
      * The [Socket] event

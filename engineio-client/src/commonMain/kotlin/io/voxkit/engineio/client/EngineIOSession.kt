@@ -3,6 +3,7 @@ package io.voxkit.engineio.client
 import co.touchlab.kermit.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.http.*
 import io.voxkit.engineio.client.transports.Transport
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.client.transports.pollingTransport
@@ -37,6 +38,8 @@ public interface EngineIOSession : CoroutineScope {
      */
     public val call: StateFlow<HttpClientCall?>
 
+    public val state: StateFlow<State>
+
     /**
      * Sends a text packet to the Engine.IO server.
      *
@@ -54,11 +57,19 @@ public interface EngineIOSession : CoroutineScope {
     /**
      * Closes the session.
      */
-    public suspend fun close()
+    public fun close()
+
+    public sealed interface State {
+        public data object Opening : State
+        public data object Open : State
+        public data object Upgrading : State
+        public data class Closing(val reason: String, val cause: Throwable?) : State
+        public data class Closed(val reason: String, val cause: Throwable?) : State
+    }
 }
 
 /**
- * Creates a new [EngineIOSession] using the provided [urlString] and [block] to configure the [EngineIOOptions].
+ * Creates a new [EngineIOSession] using the provided `urlString` and `block` to configure the [EngineIOOptions].
  *
  * @param urlString The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
  * will be use websocket transport only.
@@ -67,8 +78,20 @@ public interface EngineIOSession : CoroutineScope {
 public suspend fun HttpClient.engineIOSession(
     urlString: String,
     block: EngineIOOptionsBuilder.() -> Unit = {}
+): EngineIOSession = engineIOSession(Url(urlString), block)
+
+/**
+ * Creates a new [EngineIOSession] using the provided `url` and `block` to configure the [EngineIOOptions].
+ *
+ * @param url The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
+ * will be use websocket transport only.
+ * @param block A lambda function to configure the [EngineIOOptions].
+ */
+public suspend fun HttpClient.engineIOSession(
+    url: Url,
+    block: EngineIOOptionsBuilder.() -> Unit = {}
 ): EngineIOSession {
-    val options = EngineIOOptionsBuilder(urlString).apply(block).build()
+    val options = EngineIOOptionsBuilder(url).apply(block).build()
     return engineIOSession(options)
 }
 

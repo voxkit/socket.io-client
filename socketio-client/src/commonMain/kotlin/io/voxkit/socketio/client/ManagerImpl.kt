@@ -1,204 +1,273 @@
-//package io.voxkit.socketio.client
-//
-//import io.ktor.client.*
-//import io.voxkit.engineio.client.EngineIOSession
-//import io.voxkit.engineio.client.EngineIOSocketClosedException
-//import io.voxkit.engineio.client.engineIOHttpClient
-//import io.voxkit.engineio.client.engineIOSession
-//import io.voxkit.engineio.parser.Packet
-//import kotlinx.coroutines.*
-//import kotlinx.coroutines.channels.Channel
-//import kotlinx.coroutines.flow.MutableSharedFlow
-//import kotlinx.coroutines.flow.SharedFlow
-//import kotlinx.coroutines.flow.asSharedFlow
-//import kotlin.coroutines.CoroutineContext
-//import kotlin.math.min
-//import kotlin.math.pow
-//import kotlin.random.Random
-//
-//internal class ManagerImpl(
-//    private val uri: String,
-//    private val options: ManagerOptions
-//) : Manager, CoroutineScope {
-//    override val coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Default
-//
-//    private val httpClient: HttpClient = engineIOHttpClient()
-//    private var engineSession: EngineIOSession? = null
-//    private val sockets = mutableMapOf<String, SocketImpl>()
-//    private var reconnectionAttempts = 0
-//
-//    private val _events = MutableSharedFlow<Manager.Event>(extraBufferCapacity = 10)
-//    val events: SharedFlow<Manager.Event> = _events.asSharedFlow()
-//
-//    private var reconnectJob: Job? = null
-//    private var connectingPromise: CompletableDeferred<Unit>? = null
-//
-//    init {
-//        if (options.autoConnect) {
-//            launch { connect() }
-//        }
-//    }
-//
-//    override suspend fun connect() {
-//        if (engineSession != null || connectingPromise != null) return
-//
-//        val connecting = CompletableDeferred<Unit>()
-//        connectingPromise = connecting
-//
-//        try {
-//            val session = httpClient.engineIOSession(uri) {
-//                // Configure engine.io options if needed
-//            }
-//            engineSession = session
-//
-//            // Handle incoming packets
-//            launch {
-//                try {
-//                    processIncomingPackets(session)
-//                } catch (e: Exception) {
-//                    if (e !is CancellationException) {
-//                        maybeReconnect(e)
-//                    }
-//                }
-//            }
-//
-//            reconnectionAttempts = 0
-//            connecting.complete(Unit)
-//        } catch (e: Exception) {
-//            connecting.completeExceptionally(e)
-//            maybeReconnect(e)
-//        } finally {
-//            connectingPromise = null
-//        }
-//    }
-//
-//    private suspend fun processIncomingPackets(session: EngineIOSession) {
-//        for (packet in session.incoming) {
-//            when (packet) {
-//                is Packet.Message -> {
-//                    val message = packet.data as? String ?: continue
-//                    // TODO: Decode Socket.IO packet and dispatch to appropriate socket
-//                    // Each Socket.IO packet contains namespace and event/data
-//                }
-//                is Packet.Binary -> {
-//                    // Handle binary data
-//                }
-//                else -> {
-//                    // Engine.IO specific packets are handled internally by the Engine.IO client
-//                }
-//            }
-//        }
-//    }
-//
-//    override suspend fun socket(namespace: String, auth: AuthSocketOption?): Socket {
-//        val fullNamespace = if (namespace.startsWith("/")) namespace else "/$namespace"
-//
-//        return sockets.getOrPut(fullNamespace) {
-//            SocketImpl(
-//                namespace = fullNamespace,
-//                manager = this,
-//                auth = auth
-//            ).also {
-//                // Connect the socket if engine is already connected
-//                engineSession?.let { _ ->
-//                    it.onConnect()
-//                }
-//            }
-//        }
-//    }
-//
-//    private suspend fun maybeReconnect(cause: Throwable) {
-//        if (!options.reconnection || reconnectionAttempts >= options.reconnectionAttempts) {
-//            _events.emit(Manager.Event.ReconnectionFailed)
-//            return
-//        }
-//
-//        // Clean up existing session
-//        engineSession?.close()
-//        engineSession = null
-//
-//        // Start reconnection process
-//        if (reconnectJob?.isActive != true) {
-//            reconnectJob = launch {
-//                reconnectionAttempts++
-//                _events.emit(Manager.Event.ReconnectAttempt(reconnectionAttempts))
-//
-//                val delay = calculateBackoff(
-//                    attempt = reconnectionAttempts,
-//                    baseDelay = options.reconnectionDelay.inWholeMilliseconds,
-//                    maxDelay = options.reconnectionDelayMax.inWholeMilliseconds,
-//                    factor = options.randomizationFactor
-//                )
-//
-//                delay(delay)
-//
-//                try {
-//                    connect()
-//                    _events.emit(Manager.Event.Reconnect(reconnectionAttempts))
-//                } catch (e: Exception) {
-//                    _events.emit(Manager.Event.ReconnectError(e))
-//                    maybeReconnect(e)
-//                }
-//            }
-//        }
-//    }
-//
-//    private fun calculateBackoff(
-//        attempt: Int,
-//        baseDelay: Long,
-//        maxDelay: Long,
-//        factor: Double
-//    ): Long {
-//        val calculatedDelay = min(maxDelay.toDouble(), baseDelay * 2.0.pow(attempt - 1))
-//        val jitter = 1 + factor - Random.nextDouble() * factor * 2
-//        return (calculatedDelay * jitter).toLong()
-//    }
-//
-//    internal suspend fun send(namespace: String, packetData: String) {
-//        val session = engineSession ?: throw EngineIOSocketClosedException()
-//        // Format data according to Socket.IO protocol and send via Engine.IO
-//        session.send(packetData)
-//    }
-//
-//    internal fun close() {
-//        launch {
-//            reconnectJob?.cancel()
-//            engineSession?.close()
-//            engineSession = null
-//
-//            // Notify all sockets
-//            sockets.values.forEach { it.onDisconnect("io client disconnect", null) }
-//            sockets.clear()
-//
-//            cancel() // Cancel the scope
-//        }
-//    }
-//
-//    // Socket implementation
-//    private inner class SocketImpl(
-//        private val namespace: String,
-//        private val manager: ManagerImpl,
-//        private val auth: AuthSocketOption?
-//    ) : Socket {
-//        override val active: Boolean = true
-//        override var connected: Boolean = false
-//            private set
-//        override val disconnected: Boolean
-//            get() = !connected
-//        override val id: String? = null  // Will be set after connection
-//        override val io: Manager = manager
-//
-//        private val _events = Channel<Socket.Event>(Channel.BUFFERED)
-//        val events: Channel<Socket.Event> = _events
-//
-//        internal suspend fun onConnect() {
-//            connected = true
-//            _events.send(Socket.Event.Connect)
-//        }
-//
-//        internal suspend fun onDisconnect(reason: String, cause: Throwable?) {
-//            connected = false
-//            _events.send(Socket.Event.Disconnect(reason, cause))
-//        }
-//    }
-//}
+package io.voxkit.socketio.client
+
+import co.touchlab.kermit.Logger
+import co.touchlab.kermit.LoggerConfig
+import io.ktor.client.*
+import io.ktor.http.*
+import io.voxkit.engineio.client.EngineIOSession
+import io.voxkit.engineio.client.engineIOSession
+import io.voxkit.socketio.client.Manager.State
+import io.voxkit.socketio.client.parser.DefaultParser
+import io.voxkit.socketio.client.parser.Packet
+import io.voxkit.socketio.client.parser.Parser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.cancellation.CancellationException
+import io.voxkit.engineio.parser.Packet as EngineIOPacket
+
+internal class ManagerImpl(
+    private val serverUrl: Url,
+    val options: ManagerOptions,
+    private val scope: CoroutineScope,
+    private val httpClient: HttpClient,
+    private val loggerConfig: LoggerConfig,
+) : Manager {
+
+    private val _events = MutableSharedFlow<Manager.Event>()
+    override val events: Flow<Manager.Event> = _events.asSharedFlow()
+
+    private val _incoming = MutableSharedFlow<Packet>()
+    val incoming: Flow<Packet> = _incoming.asSharedFlow()
+
+    private val _state = MutableStateFlow<State>(State.Disconnected("not connected", null))
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    var recovered: Boolean = false
+        private set
+
+    private val logger = Logger(loggerConfig, "Manager")
+    private val parser = DefaultParser()
+
+    private var reconnectionAttemptCount = 0
+    private var engineIOSession: EngineIOSession? = null
+
+    // TODO: atomic
+    private val sockets = mutableMapOf<String, Socket>()
+    private val connectedSockets = MutableStateFlow<Set<String>>(emptySet())
+    private val hasConnectedSockets get() = connectedSockets.value.isNotEmpty()
+
+    private val mutex = Mutex()
+
+    init {
+        observeConnectedSockets()
+        startReconnectionLoop()
+
+        scope.launch {
+            try {
+                awaitCancellation()
+            } finally {
+                sockets.values.forEach { it.close() }
+                engineIOSession?.close()
+                engineIOSession = null
+            }
+        }
+    }
+
+    private fun startReconnectionLoop() {
+        scope.launch {
+            state.first { it is State.Connected }
+            while (true) {
+                val disconnected = state.first { it is State.Disconnected } as State.Disconnected
+                if (
+                    options.reconnection &&
+                    hasConnectedSockets &&
+                    disconnected.reason in listOf("ping timeout", "transport close", "transport error")
+                ) {
+                    runCatching { connect(recovering = true) }
+                }
+                state.first { it is State.Connected }
+            }
+        }
+    }
+
+    private fun observeConnectedSockets() {
+        scope.launch {
+            connectedSockets.collect { namespaces ->
+                if (namespaces.isEmpty()) {
+                    disconnect()
+                } else if (state.value !is State.Connected) {
+                    runCatching { connect(recovering = false) }
+                }
+            }
+        }
+    }
+
+    override suspend fun connect() {
+        connect(false)
+    }
+
+    private suspend fun connect(recovering: Boolean) {
+        if (engineIOSession?.isActive == true) return
+
+        mutex.withLock {
+            if (engineIOSession?.isActive == true) return
+            _state.value = State.Connecting
+            reconnectionAttemptCount = 0
+            connectWithRetries()
+                .onSuccess {
+                    logger.d { "Connection succeed. Reconnect attempts: $reconnectionAttemptCount" }
+                    recovered = recovering
+                    _state.value = State.Connected
+                    if (reconnectionAttemptCount > 0) {
+                        _events.emit(Manager.Event.Reconnect(reconnectionAttemptCount))
+                    }
+                    reconnectionAttemptCount = 1
+                }
+                .onFailure { e ->
+                    logger.w(e) { "Connection failed. Reconnect attempts: $reconnectionAttemptCount" }
+                    recovered = false
+                    _events.emit(Manager.Event.ReconnectionFailed)
+                    _state.value = State.Disconnected("connection failed", e)
+                }
+                .getOrThrow()
+            startEngineIOSessionLifecycle()
+        }
+    }
+
+    private suspend fun disconnect() {
+        if (engineIOSession?.isActive != true) return
+        mutex.withLock {
+            if (engineIOSession?.isActive == true) {
+                engineIOSession?.close()
+                engineIOSession = null
+            }
+        }
+    }
+
+    private suspend fun connectWithRetries(): Result<Unit> {
+        var result: Result<Unit> = Result.success(Unit)
+
+        while (reconnectionAttemptCount <= options.reconnectionAttempts) {
+            if (reconnectionAttemptCount > 0) {
+                logger.d { "Reconnect. Attempt: $reconnectionAttemptCount" }
+                _events.emit(Manager.Event.ReconnectAttempt(reconnectionAttemptCount))
+            } else {
+                logger.d { "Connect. Attempt: $reconnectionAttemptCount" }
+            }
+
+            result = runCatching { createEngineIOSession() }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+
+                    logger.w { "Connection attempt failed: ${e.message}, ${e.cause?.message}" }
+                    if (reconnectionAttemptCount == 0) {
+                        _events.emit(Manager.Event.Error(e))
+                    } else {
+                        _events.emit(Manager.Event.ReconnectError(e))
+                    }
+
+                    if (options.reconnection) {
+                        val duration = options.calculateReconnectionDelay(reconnectionAttemptCount)
+                        logger.d { "Try to reconnect in $duration" }
+                        delay(duration.coerceAtMost(options.reconnectionDelayMax))
+                    }
+                }
+
+            if (!options.reconnection || engineIOSession?.isActive == true) break
+
+            reconnectionAttemptCount++
+        }
+
+        return result
+    }
+
+    private suspend fun createEngineIOSession() {
+        engineIOSession = withTimeout(options.timeout) {
+            httpClient.engineIOSession(serverUrl) {
+                path = options.path
+                headers.appendAll(options.headers)
+                parameters.appendAll(options.parameters)
+                timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
+                transports = options.transports
+                loggerConfig = this@ManagerImpl.loggerConfig
+            }
+        }
+    }
+
+    private fun startEngineIOSessionLifecycle() {
+        val session = checkNotNull(engineIOSession) { "EngineIOSession is not available" }
+
+        session.launch(SupervisorJob()) {
+            for (engineIoPacket in session.incoming) {
+                onEngineIOPacket(engineIoPacket, session.incoming)
+            }
+        }
+
+        session.launch {
+            try {
+                awaitCancellation()
+            } finally {
+                val sessionState = session.state.value as EngineIOSession.State.Closed
+                logger.d { "Engine.IO session closed. Reason: ${sessionState.reason}" }
+                _state.value = State.Disconnected(sessionState.reason, sessionState.cause)
+            }
+        }
+    }
+
+    private suspend fun onEngineIOPacket(engineIoPacket: EngineIOPacket, next: ReceiveChannel<EngineIOPacket>) {
+        when (engineIoPacket) {
+            is EngineIOPacket.Binary -> {
+                var decoded = parser.decode(engineIoPacket.data)
+                while (decoded !is Parser.Decoded.Completed) {
+                    val nextEngineIoPacket = next.receive()
+                    check(nextEngineIoPacket is EngineIOPacket.Binary)
+                    decoded = parser.decode(nextEngineIoPacket.data, decoded as Parser.Decoded.Partial)
+                }
+                _incoming.emit(decoded.packet)
+                logger.v { "client <== server: ${decoded.packet}" }
+            }
+
+            is EngineIOPacket.Message -> {
+                val packet = parser.decode(engineIoPacket.data)
+                _incoming.emit(packet)
+                logger.v { "client <== server: $packet" }
+            }
+
+            is EngineIOPacket.Ping -> _events.emit(Manager.Event.Ping)
+
+            else -> {
+                // ignore other packets
+            }
+        }
+    }
+
+    override suspend fun socket(namespace: String, auth: AuthSocketOption?): Socket {
+        val socket = sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerConfig) }
+        if (options.autoConnect) {
+            socket.connect()
+        }
+        return socket
+    }
+
+    override suspend fun send(packet: Packet) {
+        logger.v { "client ==> server: $packet" }
+
+        when (packet.type) {
+            Packet.Type.CONNECT -> connectedSockets.value += packet.namespace
+            Packet.Type.DISCONNECT -> connectedSockets.value -= packet.namespace
+            else -> Unit // ignore other packet types
+        }
+
+        val session = checkNotNull(engineIOSession)
+
+        when (val encoded = parser.encode(packet)) {
+            is Parser.Encoded.Binary -> encoded.data.forEach { session.send(it) }
+            is Parser.Encoded.Text -> session.send(encoded.data)
+        }
+    }
+}
