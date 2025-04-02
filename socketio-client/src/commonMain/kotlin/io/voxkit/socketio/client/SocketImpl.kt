@@ -4,9 +4,9 @@ import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
-import io.voxkit.socketio.client.parser.arg
-import io.voxkit.socketio.client.parser.jsonElementOrNull
-import io.voxkit.socketio.client.parser.stringOrNull
+import io.voxkit.socketio.client.util.stringOrNull
+import io.voxkit.socketio.client.util.dataOf
+import io.voxkit.socketio.client.util.jsonElementOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 
@@ -57,7 +56,7 @@ internal class SocketImpl(
     private val logger = loggerFactory.createLogger("socket.io [$namespace]")
 
     // TODO: atomic
-    private var ackId = 0
+    private var ackId = 0L
     private val incoming = manager.incoming.filter { it.namespace == namespace }
     private val outgoing = Channel<Packet>(capacity = Channel.UNLIMITED)
 
@@ -140,10 +139,7 @@ internal class SocketImpl(
     override suspend fun connect() = coroutineScope {
         manager.connect()
 
-        val data = auth?.let {
-            val authData = JsonObject(mapOf(it.paramName to JsonPrimitive(it.token))).arg()
-            listOf(authData)
-        }
+        val data = auth?.let { dataOf(mapOf(it.paramName to JsonPrimitive(it.token))) }
 
         val connectAck = async(start = CoroutineStart.UNDISPATCHED) {
             incoming.first { it.type == Packet.Type.CONNECT || it.type == Packet.Type.CONNECT_ERROR }
@@ -198,7 +194,7 @@ internal class SocketImpl(
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
-            data = listOf(event.arg()) + args.toList(),
+            data = dataOf(event) + args.toList(),
         )
         outgoing.send(packet)
     }
@@ -208,7 +204,7 @@ internal class SocketImpl(
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
-            data = listOf(event.arg()) + args.toList(),
+            data = dataOf(event) + args.toList(),
             ackId = ackId++,
         )
         val ackPacket = sendPacketWithAck(packet)

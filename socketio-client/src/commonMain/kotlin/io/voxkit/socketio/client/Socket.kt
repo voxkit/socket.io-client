@@ -2,6 +2,8 @@ package io.voxkit.socketio.client
 
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -131,3 +133,6 @@ public interface Socket : AutoCloseable {
         public suspend operator fun invoke(vararg args: Packet.Data)
     }
 }
+
+public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filterIsInstance<T>()
+public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }

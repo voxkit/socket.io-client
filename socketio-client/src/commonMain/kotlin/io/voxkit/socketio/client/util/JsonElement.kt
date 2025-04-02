@@ -1,4 +1,4 @@
-package io.voxkit.socketio.client.parser
+package io.voxkit.socketio.client.util
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject

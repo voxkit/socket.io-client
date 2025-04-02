@@ -1,13 +1,31 @@
 package io.voxkit.socketio.client.parser
 
+import io.voxkit.socketio.client.util.isAttachmentPlaceholder
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.encodeToJsonElement
 
+/**
+ * Represents a packet in the Socket.IO protocol.
+ */
 public data class Packet(
+    /**
+     * The packet type.
+     */
     val type: Type,
+
+    /**
+     * Packet's namespace.
+     */
     val namespace: String = "/",
+
+    /**
+     * Packet's data
+     */
     val data: List<Data>? = null,
-    val ackId: Int? = null,
+
+    /**
+     * Packet's acknowledgment ID.
+     */
+    val ackId: Long? = null,
 ) {
     public enum class Type {
         CONNECT,
@@ -38,21 +56,6 @@ public data class Packet(
         }
     }
 }
-
-public inline fun <reified T> T.arg(): Packet.Data {
-    return when (this) {
-        is ByteArray -> Packet.Data.Binary(this)
-        else -> Packet.Data.Json(DefaultParser.JSON.encodeToJsonElement(this))
-    }
-}
-
-public val Packet.Data.jsonElementOrNull: JsonElement? get() = (this as? Packet.Data.Json)?.element
-public val Packet.Data.jsonElement: JsonElement
-    get() = (this as? Packet.Data.Json)?.element ?: error("Not a JSON element")
-
-public val Packet.Data.bytesOrNull: ByteArray? get() = (this as? Packet.Data.Binary)?.buffer
-public val Packet.Data.bytes: ByteArray
-    get() = (this as? Packet.Data.Binary)?.buffer ?: error("Not a binary element")
 
 internal val Packet.placeholdersCount: Int
     get() = data?.count { (it as? Packet.Data.Json)?.element?.isAttachmentPlaceholder == true } ?: 0

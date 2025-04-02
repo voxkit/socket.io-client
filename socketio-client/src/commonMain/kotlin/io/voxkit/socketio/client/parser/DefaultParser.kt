@@ -1,6 +1,7 @@
 package io.voxkit.socketio.client.parser
 
 import io.ktor.utils.io.core.*
+import io.voxkit.socketio.client.util.isAttachmentPlaceholder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -175,7 +176,7 @@ internal class DefaultParser : Parser {
     private fun decodeAckId(tokens: PacketParts): PacketParts {
         val tok = tokens.text.takeWhile { it.isDigit() }
         if (tok.isEmpty()) return tokens
-        val ackId = tok.toInt()
+        val ackId = tok.toLong()
         return tokens.copy(text = tokens.text.substringAfter(tok), ackId = ackId)
     }
 
@@ -183,7 +184,7 @@ internal class DefaultParser : Parser {
         val text: String,
         val attachmentsCount: Int? = null,
         val namespace: String? = null,
-        val ackId: Int? = null,
+        val ackId: Long? = null,
         val payload: String? = null,
     )
 

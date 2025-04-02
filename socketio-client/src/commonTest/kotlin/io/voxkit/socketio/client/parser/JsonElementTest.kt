@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client.parser
 
+import io.voxkit.socketio.client.util.isAttachmentPlaceholder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlin.test.Test

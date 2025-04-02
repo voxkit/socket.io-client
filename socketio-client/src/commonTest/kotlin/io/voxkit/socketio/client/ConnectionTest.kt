@@ -3,14 +3,13 @@ package io.voxkit.socketio.client
 import io.ktor.client.*
 import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIOHttpClient
-import io.voxkit.socketio.client.parser.arg
-import io.voxkit.socketio.client.parser.jsonElement
+import io.voxkit.socketio.client.util.argsOf
+import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -83,17 +82,11 @@ class ConnectionTest {
         val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
 
         backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            socket.events
-                .filter { it is Socket.Event.Custom && it.event == "ack" }
-                .collect { ev ->
-                    ev as Socket.Event.Custom
-                    ev.ack?.invoke(5.arg(), JsonObject(mapOf("test" to JsonPrimitive(true))).arg())
-                }
+            val ev = socket.on("ack").first()
+            ev.ack?.invoke(*argsOf(5, mapOf("test" to true)))
         }
         val ackBackDeferred = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
-            socket.events
-                .filter { it is Socket.Event.Custom && it.event == "ackBack" }
-                .first()
+            socket.on("ackBack").first()
         }
         socket.send("callAck")
 

@@ -1,6 +1,7 @@
 package io.voxkit.socketio.client.parser
 
 import io.ktor.utils.io.core.*
+import io.voxkit.socketio.client.util.dataOf
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -19,12 +20,12 @@ class DefaultParserTest {
                 "Failed to encode CONNECT packet"
             ),
             Triple(
-                Packet(Packet.Type.CONNECT, "/admin", data = listOf(Sid().arg())),
+                Packet(Packet.Type.CONNECT, "/admin", data = dataOf(Sid())),
                 Parser.Encoded.Text("""0/admin,{"sid":"oSO0OpakMV_3jnilAAAA"}"""),
                 """Failed to encode CONNECT packet with namespace "/admin" and data"""
             ),
             Triple(
-                Packet(Packet.Type.CONNECT_ERROR, data = listOf(ConnectError().arg())),
+                Packet(Packet.Type.CONNECT_ERROR, data = dataOf(ConnectError())),
                 Parser.Encoded.Text("""4{"message":"Not authorized"}"""),
                 """Failed to encode CONNECT_ERROR packet with data"""
             ),
@@ -34,22 +35,22 @@ class DefaultParserTest {
                 "Failed to encode DISCONNECT packet"
             ),
             Triple(
-                Packet(Packet.Type.EVENT, data = listOf("foo".arg())),
+                Packet(Packet.Type.EVENT, data = dataOf("foo")),
                 Parser.Encoded.Text("""2["foo"]"""),
                 "Failed to encode EVENT packet with data"
             ),
             Triple(
-                Packet(Packet.Type.EVENT, "/admin", data = listOf("bar".arg())),
+                Packet(Packet.Type.EVENT, "/admin", data = dataOf("bar")),
                 Parser.Encoded.Text("""2/admin,["bar"]"""),
                 """Failed to encode EVENT packet with "/admin" namespace and data"""
             ),
             Triple(
-                Packet(Packet.Type.EVENT, data = listOf("foo".arg()), ackId = 12),
+                Packet(Packet.Type.EVENT, data = dataOf("foo"), ackId = 12),
                 Parser.Encoded.Text("""212["foo"]"""),
                 "Failed to encode EVENT packet with acknowledgment ID"
             ),
             Triple(
-                Packet(Packet.Type.ACK, "/admin", data = listOf("bar".arg()), ackId = 13),
+                Packet(Packet.Type.ACK, "/admin", data = dataOf("bar"), ackId = 13),
                 Parser.Encoded.Text("""3/admin,13["bar"]"""),
                 "Failed to encode ACK packet with acknowledgment ID"
             ),
@@ -68,7 +69,7 @@ class DefaultParserTest {
             Triple(
                 Packet(
                     Packet.Type.BINARY_EVENT,
-                    data = listOf("baz".arg(), byteArrayOf(1, 2, 3, 4).arg())
+                    data = dataOf("baz", byteArrayOf(1, 2, 3, 4))
                 ),
                 listOf(
                     """51-["baz",{"_placeholder":true,"num":0}]""",
@@ -81,11 +82,7 @@ class DefaultParserTest {
                 Packet(
                     Packet.Type.BINARY_EVENT,
                     namespace = "/admin",
-                    data = listOf(
-                        "baz".arg(),
-                        byteArrayOf(1, 2).arg(),
-                        byteArrayOf(3, 4).arg()
-                    )
+                    data = dataOf("baz", byteArrayOf(1, 2), byteArrayOf(3, 4))
                 ),
                 listOf(
                     """52-/admin,["baz",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""",
@@ -99,10 +96,7 @@ class DefaultParserTest {
                 Packet(
                     Packet.Type.BINARY_ACK,
                     namespace = "/",
-                    data = listOf(
-                        "bar".arg(),
-                        byteArrayOf(1, 2, 3, 4).arg(),
-                    ),
+                    data = dataOf("bar", byteArrayOf(1, 2, 3, 4)),
                     ackId = 15
                 ),
                 listOf(
@@ -135,12 +129,12 @@ class DefaultParserTest {
             ),
             Triple(
                 """0/admin,{"sid":"oSO0OpakMV_3jnilAAAA"}""",
-                Packet(Packet.Type.CONNECT, "/admin", data = listOf(Sid().arg())),
+                Packet(Packet.Type.CONNECT, "/admin", data = dataOf(Sid())),
                 """Failed to decode CONNECT packet with namespace "/admin" and data"""
             ),
             Triple(
                 """4{"message":"Not authorized"}""",
-                Packet(Packet.Type.CONNECT_ERROR, data = listOf(ConnectError().arg())),
+                Packet(Packet.Type.CONNECT_ERROR, data = dataOf(ConnectError())),
                 """Failed to decode CONNECT_ERROR packet with data"""
             ),
             Triple(
@@ -150,22 +144,22 @@ class DefaultParserTest {
             ),
             Triple(
                 """2["foo"]""",
-                Packet(Packet.Type.EVENT, data = listOf("foo".arg())),
+                Packet(Packet.Type.EVENT, data = dataOf("foo")),
                 "Failed to decode EVENT packet with data"
             ),
             Triple(
                 """2/admin,["bar"]""",
-                Packet(Packet.Type.EVENT, "/admin", data = listOf("bar".arg())),
+                Packet(Packet.Type.EVENT, "/admin", data = dataOf("bar")),
                 """Failed to decode EVENT packet with "/admin" namespace and data"""
             ),
             Triple(
                 """212["foo"]""",
-                Packet(Packet.Type.EVENT, data = listOf("foo".arg()), ackId = 12),
+                Packet(Packet.Type.EVENT, data = dataOf("foo"), ackId = 12),
                 "Failed to decode EVENT packet with acknowledgment ID"
             ),
             Triple(
                 """3/admin,13["bar"]""",
-                Packet(Packet.Type.ACK, "/admin", data = listOf("bar".arg()), ackId = 13),
+                Packet(Packet.Type.ACK, "/admin", data = dataOf("bar"), ackId = 13),
                 "Failed to decode ACK packet with acknowledgment ID"
             )
         )
@@ -195,7 +189,7 @@ class DefaultParserTest {
         assertEquals(
             Packet(
                 Packet.Type.BINARY_EVENT,
-                data = listOf("baz".arg(), byteArrayOf(1, 2, 3, 4).arg())
+                data = dataOf("baz", byteArrayOf(1, 2, 3, 4))
             ),
             decoded.packet
         )
@@ -221,10 +215,10 @@ class DefaultParserTest {
             Packet(
                 Packet.Type.BINARY_EVENT,
                 namespace = "/admin",
-                data = listOf(
-                    "baz".arg(),
-                    byteArrayOf(1, 2).arg(),
-                    byteArrayOf(3, 4).arg()
+                data = dataOf(
+                    "baz",
+                    byteArrayOf(1, 2),
+                    byteArrayOf(3, 4),
                 )
             ),
             decoded.packet
@@ -248,7 +242,7 @@ class DefaultParserTest {
         assertEquals(
             Packet(
                 Packet.Type.BINARY_ACK,
-                data = listOf("bar".arg(), byteArrayOf(1, 2, 3, 4).arg()),
+                data = dataOf("bar", byteArrayOf(1, 2, 3, 4)),
                 ackId = 15
             ),
             decoded.packet
@@ -273,7 +267,7 @@ class DefaultParserTest {
         assertEquals(
             Packet(
                 Packet.Type.BINARY_ACK,
-                data = listOf("bar".arg(), byteArrayOf(1, 2).arg(), byteArrayOf(3, 4).arg()),
+                data = dataOf("bar", byteArrayOf(1, 2), byteArrayOf(3, 4)),
                 ackId = 15
             ),
             decoded.packet
