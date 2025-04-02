@@ -1,11 +1,9 @@
 package io.voxkit.client
 
-import co.touchlab.kermit.Severity
-import co.touchlab.kermit.loggerConfigInit
-import co.touchlab.kermit.platformLogWriter
 import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.parser.Packet
+import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -23,7 +21,7 @@ class BinaryWSTest {
 
         val session = httpClient.engineIOSession {
             port = PORT
-            loggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Verbose)
+            loggingLevel = LoggingLevel.DEBUG
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {
@@ -48,7 +46,7 @@ class BinaryWSTest {
 
         val session = httpClient.engineIOSession {
             port = PORT
-            loggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Verbose)
+            loggingLevel = LoggingLevel.DEBUG
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {
@@ -60,8 +58,8 @@ class BinaryWSTest {
         session.send(binaryData)
         session.send(utf8String)
 
-        assertEquals(Packet.Binary(binaryData), channel.receive() as Packet.Binary )
-        assertEquals(Packet.Message(utf8String), channel.receive() as  Packet.Message )
+        assertEquals(Packet.Binary(binaryData), channel.receive() as Packet.Binary)
+        assertEquals(Packet.Message(utf8String), channel.receive() as Packet.Message)
 
         session.close()
     }

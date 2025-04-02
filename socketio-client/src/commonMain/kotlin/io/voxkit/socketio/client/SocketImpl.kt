@@ -1,12 +1,11 @@
 package io.voxkit.socketio.client
 
-import co.touchlab.kermit.Logger
-import co.touchlab.kermit.LoggerConfig
 import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
 import io.voxkit.socketio.client.parser.asPacketData
+import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.TimeoutCancellationException
@@ -31,7 +30,7 @@ internal class SocketImpl(
     private val manager: ManagerImpl,
     private val auth: AuthSocketOption?,
     private val scope: CoroutineScope,
-    loggerConfig: LoggerConfig,
+    loggerFactory: VoxKitLoggerFactory,
 ) : Socket {
 
     override var active: Boolean = false
@@ -52,7 +51,7 @@ internal class SocketImpl(
     private val _events = MutableSharedFlow<Event>()
     override val events: Flow<Event> = _events.asSharedFlow()
 
-    private val logger = Logger(loggerConfig, "SocketIO: $namespace")
+    private val logger = loggerFactory.createLogger("socket.io [$namespace]")
 
     // TODO: atomic
     private var ackId = 0
@@ -92,16 +91,16 @@ internal class SocketImpl(
 
     private suspend fun sendPacket(packet: Packet) {
         if (_connected.value.not()) {
-            logger.v { "Send packet. Manager is not connected yet. Wait for connection." }
+            logger.d { "Send packet. Manager is not connected yet. Wait for connection." }
         }
 
         _connected.first { it }
-        logger.v { "Socket connected. Send packet: $packet" }
+        logger.d { "Socket connected. Send packet: $packet" }
 
         runCatching {
             manager.send(packet)
         }.onFailure {
-            logger.v(it) { "Sending packet failed. Will try to send it again." }
+            logger.w(it) { "Sending packet failed. Will try to send it again." }
             sendPacket(packet)
         }
     }

@@ -108,7 +108,7 @@ private suspend fun HttpClient.engineIOSession(options: EngineIOOptions): Engine
     val transportType = selectTransportType(options)
     val transport = createTransport(transportType, options)
     val handshakePacket = transport.incoming.receive()
-    return EngineIOSessionImpl(options.loggerConfig, transport, options, handshakePacket, httpClient = this)
+    return EngineIOSessionImpl(transport, options, handshakePacket, httpClient = this)
 }
 
 private suspend fun HttpClient.createTransport(

@@ -1,11 +1,9 @@
 package io.voxkit.socketio.client
 
-import co.touchlab.kermit.LoggerConfig
-import co.touchlab.kermit.Severity
-import co.touchlab.kermit.loggerConfigInit
-import co.touchlab.kermit.platformLogWriter
-import io.ktor.client.*
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.socketio.logging.LoggingLevel
+import io.voxkit.socketio.logging.Logger
+import io.voxkit.socketio.logging.VoxKitLoggerFactory
+import io.voxkit.socketio.logging.defaultLogger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -57,20 +55,16 @@ public class IOFactoryOptionsBuilder {
      */
     public var forceNew: Boolean = false
 
-    /**
-     * The logger configuration.
-     * Touchlab Kermit logger is used.
-     *
-     * @see https://kermit.touchlab.co/docs/
-     */
-    public var loggerConfig: LoggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Error)
+    public var loggingLevel: LoggingLevel = LoggingLevel.NONE
+
+    public var logger: Logger? = null
 
     public var dispatcher: CoroutineDispatcher = Dispatchers.Main
 
     internal fun build(): IOFactoryOptions {
         return IOFactoryOptions(
             forceNew = forceNew,
-            loggerConfig = loggerConfig,
+            loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel),
             dispatcher = dispatcher,
         )
     }
@@ -78,6 +72,6 @@ public class IOFactoryOptionsBuilder {
 
 internal data class IOFactoryOptions(
     val forceNew: Boolean,
-    val loggerConfig: LoggerConfig,
+    val loggerFactory: VoxKitLoggerFactory,
     val dispatcher: CoroutineDispatcher,
 )

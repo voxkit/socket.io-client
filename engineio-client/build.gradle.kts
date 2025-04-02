@@ -23,12 +23,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(project(":logging"))
             api(libs.kotlin.serialization)
             api(libs.kotlin.coroutines.core)
             api(libs.kotlin.datetime)
             api(libs.ktor.client.core)
             api(libs.ktor.client.websockets)
-            api(libs.kermit)
         }
 
         val jvmAndAndroid by creating {
@@ -54,11 +54,15 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlin.coroutines.test)
         }
+
+        jvmTest.dependencies {
+            implementation(libs.logback.classic)
+        }
     }
 }
 
 android {
-    namespace = "io.voxkit"
+    namespace = "io.voxkit.engineio"
 
     compileSdk = libs.versions.compileSdk.get().toInt()
     sourceSets["main"].res.srcDir("src/androidMain/res")

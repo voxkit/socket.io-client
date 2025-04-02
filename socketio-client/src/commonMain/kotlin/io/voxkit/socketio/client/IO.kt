@@ -44,7 +44,7 @@ public class IO internal constructor(
             options = options,
             scope = scope,
             httpClient = httpClient,
-            loggerConfig = factoryOptions.loggerConfig,
+            loggerFactory = factoryOptions.loggerFactory,
         )
     }
 

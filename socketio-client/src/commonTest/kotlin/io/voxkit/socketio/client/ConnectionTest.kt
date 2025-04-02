@@ -1,11 +1,9 @@
 package io.voxkit.socketio.client
 
-import co.touchlab.kermit.Severity
-import co.touchlab.kermit.loggerConfigInit
-import co.touchlab.kermit.platformLogWriter
 import io.ktor.client.*
 import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.test.runTest
@@ -23,12 +21,14 @@ class ConnectionTest {
     @BeforeTest
     fun setup() {
         httpClient = engineIOHttpClient {
-            install(Logging)
+            install(Logging) {
+                level = LogLevel.INFO
+            }
         }
 
         io = httpClient.IO {
-            loggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Verbose)
             dispatcher = Dispatchers.IO
+            loggingLevel = LoggingLevel.DEBUG
         }
     }
 

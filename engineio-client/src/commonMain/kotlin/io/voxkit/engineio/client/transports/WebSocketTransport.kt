@@ -1,6 +1,5 @@
 package io.voxkit.engineio.client.transports
 
-import co.touchlab.kermit.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.websocket.*
@@ -15,7 +14,6 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid: String? = null): Transport {
@@ -27,8 +25,8 @@ internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid
         .onFailure { incomingPackets.cancel() }
         .getOrThrow()
 
-    val logger = Logger(options.loggerConfig, "WebSocketTransport @ ${webSocketSession.hashCode()}")
-    logger.v { "WebSocket transport stared." }
+    val logger = options.loggerFactory.createLogger("websocket [${webSocketSession.hashCode()}]")
+    logger.d { "WebSocket transport stared." }
 
     webSocketSession.launch {
         try {
@@ -52,7 +50,7 @@ internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid
                 }
             }
         } catch (e: ClosedReceiveChannelException) {
-            logger.d { "WebSocket transport closed: ${webSocketSession.closeReason.await()}" }
+            logger.d { "WebSocket transport closed." }
             incomingPackets.send(Packet.Close)
             incomingPackets.cancel()
         }
@@ -71,6 +69,7 @@ internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid
                     else -> logger.e { "Illegal packet type: $encodedPacket" }
                 }
             }.onFailure { e ->
+                logger.w(e) { "Failed to send packet" }
                 incomingPackets.send(Packet.Error("Failed to send packet: ${e.message}"))
             }
         }

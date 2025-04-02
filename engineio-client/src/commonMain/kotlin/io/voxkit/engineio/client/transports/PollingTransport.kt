@@ -1,6 +1,5 @@
 package io.voxkit.engineio.client.transports
 
-import co.touchlab.kermit.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.network.sockets.*
@@ -44,7 +43,7 @@ internal class PollingTransport(
     private val _call = MutableStateFlow<HttpClientCall?>(null)
     override val call: StateFlow<HttpClientCall?> = _call.asStateFlow()
 
-    private val logger = Logger(options.loggerConfig, "PollingTransport @ ${hashCode()}")
+    private val logger = options.loggerFactory.createLogger("polling [${hashCode()}]")
     private val state = MutableStateFlow(State.RUNNING)
     private var sid: String? = null
 

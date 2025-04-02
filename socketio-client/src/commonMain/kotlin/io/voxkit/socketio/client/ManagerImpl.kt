@@ -1,7 +1,5 @@
 package io.voxkit.socketio.client
 
-import co.touchlab.kermit.Logger
-import co.touchlab.kermit.LoggerConfig
 import io.ktor.client.*
 import io.ktor.http.*
 import io.voxkit.engineio.client.EngineIOSession
@@ -10,6 +8,7 @@ import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
 import io.voxkit.socketio.client.parser.Parser
+import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
@@ -35,7 +34,7 @@ internal class ManagerImpl(
     val options: ManagerOptions,
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
-    private val loggerConfig: LoggerConfig,
+    private val loggerFactory: VoxKitLoggerFactory,
 ) : Manager {
 
     private val _events = MutableSharedFlow<Manager.Event>()
@@ -50,7 +49,7 @@ internal class ManagerImpl(
     var recovered: Boolean = false
         private set
 
-    private val logger = Logger(loggerConfig, "Manager @ ${hashCode()}")
+    private val logger = loggerFactory.createLogger("socket.io manager [${hashCode()}]")
     private val parser = DefaultParser()
 
     private var reconnectionAttemptCount = 0
@@ -194,7 +193,8 @@ internal class ManagerImpl(
                 parameters.appendAll(options.parameters)
                 timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
                 transports = options.transports
-                loggerConfig = this@ManagerImpl.loggerConfig
+                loggingLevel = loggerFactory.level
+                logger = loggerFactory.logger
             }
         }
     }
@@ -229,13 +229,13 @@ internal class ManagerImpl(
                     decoded = parser.decode(nextEngineIoPacket.data, decoded as Parser.Decoded.Partial)
                 }
                 _incoming.emit(decoded.packet)
-                logger.v { "client <== server: ${decoded.packet}" }
+                logger.d { "client <== server: ${decoded.packet}" }
             }
 
             is EngineIOPacket.Message -> {
                 val packet = parser.decode(engineIoPacket.data)
                 _incoming.emit(packet)
-                logger.v { "client <== server: $packet" }
+                logger.d { "client <== server: $packet" }
             }
 
             is EngineIOPacket.Ping -> _events.emit(Manager.Event.Ping)
@@ -247,7 +247,7 @@ internal class ManagerImpl(
     }
 
     override suspend fun socket(namespace: String, auth: AuthSocketOption?): Socket {
-        val socket = sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerConfig) }
+        val socket = sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerFactory) }
         if (options.autoConnect) {
             socket.connect()
         }
@@ -255,7 +255,7 @@ internal class ManagerImpl(
     }
 
     override suspend fun send(packet: Packet) {
-        logger.v { "client ==> server: $packet" }
+        logger.d { "client ==> server: $packet" }
 
         when (packet.type) {
             Packet.Type.CONNECT -> connectedSockets.value += packet.namespace

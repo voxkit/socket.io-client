@@ -1,12 +1,10 @@
 package io.voxkit.client
 
-import co.touchlab.kermit.Severity
-import co.touchlab.kermit.loggerConfigInit
-import co.touchlab.kermit.platformLogWriter
 import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Packet
+import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -25,7 +23,7 @@ class BinaryPollingTest {
         val session = httpClient.engineIOSession {
             port = PORT
             transports = setOf(TransportType.POLLING)
-            loggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Verbose)
+            loggingLevel = LoggingLevel.DEBUG
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {
@@ -51,7 +49,7 @@ class BinaryPollingTest {
         val session = httpClient.engineIOSession {
             port = PORT
             transports = setOf(TransportType.POLLING)
-            loggerConfig = loggerConfigInit(platformLogWriter(), minSeverity = Severity.Verbose)
+            loggingLevel = LoggingLevel.DEBUG
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {
@@ -63,8 +61,8 @@ class BinaryPollingTest {
         session.send(binaryData)
         session.send(utf8String)
 
-        assertEquals(Packet.Binary(binaryData), channel.receive() as Packet.Binary )
-        assertEquals(Packet.Message(utf8String), channel.receive() as  Packet.Message )
+        assertEquals(Packet.Binary(binaryData), channel.receive() as Packet.Binary)
+        assertEquals(Packet.Message(utf8String), channel.receive() as Packet.Message)
 
         session.close()
     }

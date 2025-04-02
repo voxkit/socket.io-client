@@ -1,12 +1,6 @@
 package io.voxkit.socketio.client
 
-import co.touchlab.kermit.LoggerConfig
-import co.touchlab.kermit.Severity
-import co.touchlab.kermit.loggerConfigInit
-import co.touchlab.kermit.platformLogWriter
-import io.ktor.client.*
 import io.ktor.http.*
-import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.engineio.client.transports.TransportType
 import kotlin.math.pow
 import kotlin.random.Random

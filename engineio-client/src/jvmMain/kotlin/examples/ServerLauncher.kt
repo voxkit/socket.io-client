@@ -1,6 +1,8 @@
 package examples
 
-import co.touchlab.kermit.Logger
+import io.voxkit.socketio.logging.LoggingLevel
+import io.voxkit.socketio.logging.VoxKitLogger
+import io.voxkit.socketio.logging.defaultLogger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,7 +13,7 @@ import kotlinx.coroutines.withContext
 import java.io.InputStream
 
 internal object ServerLauncher {
-    private val logger = Logger.withTag("ServerLauncher")
+    private val logger = VoxKitLogger("ServerLauncher", LoggingLevel.DEBUG, defaultLogger())
 
     private val processes = mutableMapOf<Process, CoroutineScope>()
 

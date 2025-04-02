@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.androidLibrary)
 }
 
@@ -22,24 +21,30 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        commonMain.dependencies {
-            implementation(project(":engineio-client"))
+        commonMain.dependencies { }
+
+        val jvmAndAndroid by creating {
+            dependsOn(commonMain.get())
+            dependencies {
+                implementation(libs.sl4j.api)
+            }
         }
 
-        commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.kotlin.coroutines.test)
-            implementation(libs.ktor.client.logging)
+        jvmMain {
+            dependsOn(jvmAndAndroid)
         }
 
-        jvmTest.dependencies {
-            implementation(libs.logback.classic)
+        androidMain {
+            dependsOn(jvmAndAndroid)
+            dependencies {
+                implementation(libs.sl4j.android)
+            }
         }
     }
 }
 
 android {
-    namespace = "io.voxkit.socketio"
+    namespace = "io.voxkit.socketio.logging"
 
     compileSdk = libs.versions.compileSdk.get().toInt()
     sourceSets["main"].res.srcDir("src/androidMain/res")

@@ -20,4 +20,5 @@ rootProject.name = "socket.io"
 include(
     "engineio-client",
     "socketio-client",
+    "logging",
 )
