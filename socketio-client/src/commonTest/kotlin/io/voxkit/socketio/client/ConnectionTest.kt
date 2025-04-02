@@ -5,6 +5,7 @@ import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.socketio.client.util.argsOf
 import io.voxkit.socketio.client.util.jsonElement
+import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.AfterTest
@@ -22,6 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -81,13 +84,11 @@ class ConnectionTest {
     fun testSendAck() = runTest(timeout = timeout) {
         val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
 
-        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        launch(start = CoroutineStart.UNDISPATCHED) {
             val ev = socket.on("ack").first()
             ev.ack?.invoke(*argsOf(5, mapOf("test" to true)))
         }
-        val ackBackDeferred = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) {
-            socket.on("ackBack").first()
-        }
+        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
         socket.send("callAck")
 
         val ackBack = ackBackDeferred.await()
@@ -95,5 +96,17 @@ class ConnectionTest {
         assertIs<Socket.Event.Custom>(ackBack)
         assertEquals(JsonPrimitive(5), ackBack.args[0].jsonElement)
         assertEquals(JsonObject(mapOf("test" to JsonPrimitive(true))), ackBack.args[1].jsonElement)
+    }
+
+    @Test
+    fun testReceiveDateWithAck() = runTest(timeout = timeout) {
+        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+
+        val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
+
+        val dateString = ack[0].jsonElement.stringOrNull
+        val date = dateString?.runCatching { Instant.parse(this) }?.getOrNull()
+        assertNotNull(dateString, "Date string should not be null")
+        assertNotNull(date, "Date string should be a valid date")
     }
 }

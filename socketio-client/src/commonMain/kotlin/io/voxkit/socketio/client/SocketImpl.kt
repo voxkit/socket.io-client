@@ -4,9 +4,9 @@ import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
-import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.client.util.dataOf
 import io.voxkit.socketio.client.util.jsonElementOrNull
+import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -213,8 +213,9 @@ internal class SocketImpl(
 
     private suspend fun sendPacketWithAck(packet: Packet): Packet = coroutineScope {
         val ackPacket = async(start = CoroutineStart.UNDISPATCHED) {
-            incoming.filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
-                .first { it.ackId == ackId }
+            incoming
+                .filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
+                .first { it.ackId == packet.ackId }
         }
         outgoing.send(packet)
         ackPacket.await()
