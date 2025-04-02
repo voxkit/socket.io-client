@@ -2,7 +2,6 @@ package io.voxkit.socketio.client
 
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -125,6 +124,10 @@ public interface Socket : AutoCloseable {
          */
         public data class Disconnect(val reason: String, val cause: Throwable?) : Event
 
-        public data class CustomEvent(val event: String, val args: List<JsonElement>) : Event
+        public data class Custom(val event: String, val args: List<Packet.Data>, val ack: Ack?) : Event
+    }
+
+    public fun interface Ack {
+        public suspend operator fun invoke(vararg args: Packet.Data)
     }
 }

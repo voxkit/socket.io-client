@@ -4,7 +4,9 @@ import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
-import io.voxkit.socketio.client.parser.asPacketData
+import io.voxkit.socketio.client.parser.arg
+import io.voxkit.socketio.client.parser.jsonElementOrNull
+import io.voxkit.socketio.client.parser.stringOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -15,9 +17,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
@@ -49,7 +52,7 @@ internal class SocketImpl(
     override val recovered: Boolean get() = manager.recovered
 
     private val _events = MutableSharedFlow<Event>()
-    override val events: Flow<Event> = _events.asSharedFlow()
+    override val events: Flow<Event> = merge(_events, manager.incoming.customEvents())
 
     private val logger = loggerFactory.createLogger("socket.io [$namespace]")
 
@@ -80,36 +83,65 @@ internal class SocketImpl(
     }
 
     private fun startSendingPackets() {
+        suspend fun sendPacketToManager(packet: Packet) {
+            if (_connected.value.not()) {
+                logger.d { "Send packet. Manager is not connected yet. Wait for connection." }
+            }
+
+            _connected.first { it }
+            logger.d { "Send packet: $packet" }
+
+            runCatching {
+                manager.send(packet)
+            }.onFailure {
+                logger.w(it) { "Sending packet failed. Will try to send it again." }
+                sendPacketToManager(packet)
+            }
+        }
+
         scope.launch {
             while (true) {
                 for (packet in outgoing) {
-                    sendPacket(packet)
+                    sendPacketToManager(packet)
                 }
             }
         }
     }
 
-    private suspend fun sendPacket(packet: Packet) {
-        if (_connected.value.not()) {
-            logger.d { "Send packet. Manager is not connected yet. Wait for connection." }
+    private fun Flow<Packet>.customEvents(): Flow<Event> {
+        fun Packet.toCustomEventOrNull(): Event? {
+            require(type == Packet.Type.EVENT || type == Packet.Type.BINARY_EVENT) { "Packet type is not EVENT or BINARY_EVENT" }
+
+            val event = data?.firstOrNull()?.jsonElementOrNull?.stringOrNull ?: run {
+                logger.w { "EVENT packet doesn't contain event name in data. Discard it. $data" }
+                return null
+            }
+
+            val ack = ackId?.let {
+                Socket.Ack {
+                    val ackType = if (type == Packet.Type.EVENT) Packet.Type.ACK else Packet.Type.BINARY_ACK
+                    val ackPacket = Packet(ackType, namespace, it.toList(), ackId)
+                    outgoing.send(ackPacket)
+                }
+            }
+
+            return Event.Custom(event, args = data.drop(1), ack = ack)
         }
 
-        _connected.first { it }
-        logger.d { "Socket connected. Send packet: $packet" }
-
-        runCatching {
-            manager.send(packet)
-        }.onFailure {
-            logger.w(it) { "Sending packet failed. Will try to send it again." }
-            sendPacket(packet)
+        return filter { it.namespace == namespace }.mapNotNull { packet ->
+            when (packet.type) {
+                Packet.Type.EVENT, Packet.Type.BINARY_EVENT -> packet.toCustomEventOrNull()
+                else -> null
+            }
         }
     }
+
 
     override suspend fun connect() = coroutineScope {
         manager.connect()
 
         val data = auth?.let {
-            val authData = JsonObject(mapOf(it.paramName to JsonPrimitive(it.token))).asPacketData()
+            val authData = JsonObject(mapOf(it.paramName to JsonPrimitive(it.token))).arg()
             listOf(authData)
         }
 
@@ -166,7 +198,7 @@ internal class SocketImpl(
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
-            data = listOf(event.asPacketData()) + args.toList(),
+            data = listOf(event.arg()) + args.toList(),
         )
         outgoing.send(packet)
     }
@@ -176,7 +208,7 @@ internal class SocketImpl(
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
-            data = listOf(event.asPacketData()) + args.toList(),
+            data = listOf(event.arg()) + args.toList(),
             ackId = ackId++,
         )
         val ackPacket = sendPacketWithAck(packet)
