@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client
 
+import io.ktor.client.*
 import io.ktor.http.*
 import io.voxkit.socketio.client.util.namespace
 import io.voxkit.socketio.client.util.withoutNamespace
@@ -10,11 +11,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-public fun IO(block: IOFactoryOptionsBuilder.() -> Unit = {}): IO {
-    return IO(IOFactoryOptionsBuilder().apply(block).build())
+public fun HttpClient.IO(block: IOFactoryOptionsBuilder.() -> Unit = {}): IO {
+    return IO(this, IOFactoryOptionsBuilder().apply(block).build())
 }
 
-public class IO internal constructor(private val factoryOptions: IOFactoryOptions) : AutoCloseable {
+public class IO internal constructor(
+    private val httpClient: HttpClient,
+    private val factoryOptions: IOFactoryOptions
+) : AutoCloseable {
+
     private val scope = CoroutineScope(SupervisorJob() + factoryOptions.dispatcher + CoroutineName("Socket.IO"))
     private var defaultManager: Manager? = null
 
@@ -38,7 +43,7 @@ public class IO internal constructor(private val factoryOptions: IOFactoryOption
             serverUrl = url.withoutNamespace,
             options = options,
             scope = scope,
-            httpClient = factoryOptions.httpClient,
+            httpClient = httpClient,
             loggerConfig = factoryOptions.loggerConfig,
         )
     }

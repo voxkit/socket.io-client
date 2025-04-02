@@ -67,14 +67,11 @@ public class IOFactoryOptionsBuilder {
 
     public var dispatcher: CoroutineDispatcher = Dispatchers.Main
 
-    public var httpClient: HttpClient? = null
-
     internal fun build(): IOFactoryOptions {
         return IOFactoryOptions(
             forceNew = forceNew,
             loggerConfig = loggerConfig,
             dispatcher = dispatcher,
-            httpClient = httpClient ?: engineIOHttpClient(),
         )
     }
 }
@@ -83,5 +80,4 @@ internal data class IOFactoryOptions(
     val forceNew: Boolean,
     val loggerConfig: LoggerConfig,
     val dispatcher: CoroutineDispatcher,
-    val httpClient: HttpClient,
 )

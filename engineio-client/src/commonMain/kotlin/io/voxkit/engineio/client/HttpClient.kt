@@ -5,6 +5,6 @@ import io.ktor.client.*
 /**
  * Creates a new [HttpClient] instance for Engine.IO.
  */
-public fun engineIOHttpClient(): HttpClient = platformHttpClient()
+public fun engineIOHttpClient(block: HttpClientConfig<*>.() -> Unit = {}): HttpClient = platformHttpClient(block)
 
-internal expect fun platformHttpClient(): HttpClient
+internal expect fun platformHttpClient(block: HttpClientConfig<*>.() -> Unit): HttpClient
