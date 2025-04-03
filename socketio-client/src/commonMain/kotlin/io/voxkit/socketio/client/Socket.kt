@@ -4,6 +4,7 @@ import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -157,4 +158,14 @@ public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filte
  * @param event The name of the event to filter on
  * @return A [Flow] of [Socket.Event.Custom] with the matching event name
  */
-public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }
+public inline fun Socket.on(event: String): Flow<Socket.Event.Custom> =
+    on<Socket.Event.Custom>().filter { it.event == event }
+
+
+public suspend inline fun <reified T : Socket.Event> Socket.once(block: (T) -> Unit = {}) {
+    block(on<T>().first())
+}
+
+public suspend inline fun Socket.once(event: String, block: (Socket.Event.Custom) -> Unit = {}) {
+    block(on(event).first())
+}

@@ -218,7 +218,7 @@ class ConnectionTest {
         val socket = socket()
 
         val job = launch {
-            socket.on<Socket.Event.Connect>().first()
+            socket.once<Socket.Event.Connect>()
             val foo = socket("/foo")
             connectSocket(foo)
             foo.disconnect()
@@ -226,6 +226,25 @@ class ConnectionTest {
         }
 
         launch { connectSocket(socket) }
+
+        job.join()
+    }
+
+    @Test
+    fun testConnectToNamespaceAfterConnectionGetsClosed() = runTest(timeout = timeout) {
+        val socket = socket()
+
+        val job = launch {
+            socket.once<Socket.Event.Disconnect>()
+            val foo = socket("/foo")
+            connectSocket(foo)
+            foo.disconnect()
+        }
+
+        launch {
+            connectSocket(socket)
+            socket.disconnect()
+        }
 
         job.join()
     }

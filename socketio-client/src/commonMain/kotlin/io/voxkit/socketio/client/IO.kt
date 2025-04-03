@@ -20,7 +20,7 @@ public class IO internal constructor(
     private val factoryOptions: IOFactoryOptions
 ) : AutoCloseable {
 
-    private val scope = CoroutineScope(SupervisorJob() + factoryOptions.dispatcher + CoroutineName("Socket.IO"))
+    private val scope = CoroutineScope(SupervisorJob() + factoryOptions.dispatcher + CoroutineName("socket.io"))
     private var defaultManager: Manager? = null
 
     private val namespaces = mutableSetOf<String>()
