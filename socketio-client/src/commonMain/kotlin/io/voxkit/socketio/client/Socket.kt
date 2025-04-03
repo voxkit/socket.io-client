@@ -129,10 +129,32 @@ public interface Socket : AutoCloseable {
         public data class Custom(val event: String, val args: List<Packet.Data>, val ack: Ack?) : Event
     }
 
+    /**
+     * This interface is used to acknowledge the reception of an event.
+     */
     public fun interface Ack {
+        /**
+         * This method is called when the event is acknowledged.
+         *
+         * @param args The arguments to send with the acknowledgment.
+         */
         public suspend operator fun invoke(vararg args: Packet.Data)
     }
 }
 
+/**
+ * Creates a flow of events filtered by the specified type `T` extending [Socket.Event].
+ * This allows subscribing to specific event types like [Socket.Event.Connect] or [Socket.Event.Disconnect].
+ *
+ * @return A [Flow] of events of type `T
+ */
 public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filterIsInstance<T>()
+
+/**
+ * Creates a flow of custom events filtered by the specified event name.
+ * This allows subscribing to custom events emitted by the server.
+ *
+ * @param event The name of the event to filter on
+ * @return A [Flow] of [Socket.Event.Custom] with the matching event name
+ */
 public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }
