@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -184,7 +186,31 @@ class ConnectionTest {
         socket.close()
     }
 
-    private suspend fun socket(namespace: String = "/", queryString: String  = ""): Socket {
+    @Test
+    fun testReceiveUtf8MultibyteCharacters() = runTest(timeout = timeout) {
+        val expected = listOf(
+            "てすと",
+            "Я Б Г Д Ж Й",
+            "Ä ä Ü ü ß",
+            "utf8 — string",
+            "utf8 — string",
+        )
+        val socket = socket()
+
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) {
+            socket.on("echoBack").take(expected.size).toList()
+        }
+
+        connectSocket(socket)
+        expected.forEach { str -> socket.send("echo", *argsOf(str)) }
+
+        val echoBacks = echoBackDeferred.await()
+        assertEquals(expected, echoBacks.map { it.args[0].decodeJsonOrNull<String>() })
+
+        socket.close()
+    }
+
+    private suspend fun socket(namespace: String = "/", queryString: String = ""): Socket {
         return withContext(Dispatchers.Default) { io.socket("http://localhost:3000$namespace?$queryString") }
     }
 
