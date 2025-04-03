@@ -1,6 +1,7 @@
 package io.voxkit.socketio.client
 
 import io.voxkit.socketio.client.parser.Packet
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
@@ -63,12 +64,12 @@ public interface Socket {
     /**
      * Manually connects the socket.
      */
-    public suspend fun connect()
+    public fun connect(): Job
 
     /**
      * Manually disconnects the socket.
      */
-    public suspend fun disconnect()
+    public fun disconnect(): Job
 
     /**
      * Sends an event to the socket.
@@ -76,7 +77,7 @@ public interface Socket {
      * @param event The event name to send.
      * @param args The arguments to send with the event.
      */
-    public suspend fun send(event: String, vararg args: Packet.Data)
+    public fun send(event: String, vararg args: Packet.Data): Job
 
     /**
      * Sends an event to the socket and waits for an acknowledgment from the server.
@@ -144,6 +145,13 @@ public interface Socket {
 }
 
 /**
+ * Connects the socket to the server
+ *
+ * @throws SocketIOConnectException if the connection fails
+ */
+public suspend inline fun Socket.connectOrThrow(): Unit = connect().join()
+
+/**
  * Creates a flow of events filtered by the specified type `T` extending [Socket.Event].
  * This allows subscribing to specific event types like [Socket.Event.Connect] or [Socket.Event.Disconnect].
  *
@@ -162,10 +170,6 @@ public inline fun Socket.on(event: String): Flow<Socket.Event.Custom> =
     on<Socket.Event.Custom>().filter { it.event == event }
 
 
-public suspend inline fun <reified T : Socket.Event> Socket.once(block: (T) -> Unit = {}) {
-    block(on<T>().first())
-}
+public suspend inline fun <reified T : Socket.Event> Socket.once(): T = on<T>().first()
 
-public suspend inline fun Socket.once(event: String, block: (Socket.Event.Custom) -> Unit = {}) {
-    block(on(event).first())
-}
+public suspend inline fun Socket.once(event: String): Socket.Event.Custom = on(event).first()

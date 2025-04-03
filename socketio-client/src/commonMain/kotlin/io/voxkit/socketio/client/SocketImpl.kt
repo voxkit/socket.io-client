@@ -2,14 +2,16 @@ package io.voxkit.socketio.client
 
 import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
-import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
 import io.voxkit.socketio.client.util.dataOf
+import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.client.util.jsonElementOrNull
 import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
@@ -27,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.decodeFromJsonElement
 
 internal class SocketImpl(
     private val namespace: String,
@@ -59,8 +60,9 @@ internal class SocketImpl(
 
     // TODO: atomic
     private var ackId = 0L
-    private val incoming = manager.incoming.filter { it.namespace == namespace }
-    private val outgoing = MutableStateFlow<Channel<Packet>?>(null)
+    private val incomingFlow = manager.incoming.filter { it.namespace == namespace }
+    private val outgoingChannel = MutableStateFlow<Channel<Packet>?>(null)
+    private val outgoingDispatcher = Dispatchers.Default.limitedParallelism(1, "OutgoingDispatcher")
 
     init {
         startConnectionLoop()
@@ -70,7 +72,7 @@ internal class SocketImpl(
             try {
                 awaitCancellation()
             } finally {
-                outgoing.value?.cancel()
+                outgoingChannel.value?.cancel()
             }
         }
     }
@@ -109,10 +111,10 @@ internal class SocketImpl(
         }
 
         scope.launch {
-            outgoing.filterNotNull().collect { ch ->
-                logger.d { "new outgoing packets channel created." }
+            outgoingChannel.filterNotNull().collect { channel ->
+                logger.d { "New outgoing packets channel created." }
                 runCatching {
-                    for (packet in ch) {
+                    for (packet in channel) {
                         sendPacketToManager(packet)
                     }
                 }
@@ -135,7 +137,7 @@ internal class SocketImpl(
                     val hasBinaryData = args.any { it is Packet.Data.Binary }
                     val ackType = if (hasBinaryData) Packet.Type.BINARY_ACK else Packet.Type.ACK
                     val ackPacket = Packet(ackType, namespace, args.toList(), ackId)
-                    outgoing.value?.send(ackPacket)
+                    outgoingChannel.value?.send(ackPacket)
                 }
             }
 
@@ -150,13 +152,13 @@ internal class SocketImpl(
         }
     }
 
-    override suspend fun connect() = coroutineScope {
+    override fun connect(): Job = scope.launch {
         manager.connect()
 
         val data = auth?.let { dataOf(mapOf(it.paramName to JsonPrimitive(it.token))) }
 
         val connectAck = async(start = CoroutineStart.UNDISPATCHED) {
-            incoming.first { it.type == Packet.Type.CONNECT || it.type == Packet.Type.CONNECT_ERROR }
+            incomingFlow.first { it.type == Packet.Type.CONNECT || it.type == Packet.Type.CONNECT_ERROR }
         }
 
         manager.send(Packet(Packet.Type.CONNECT, namespace, data))
@@ -172,9 +174,9 @@ internal class SocketImpl(
         when (connectResult.type) {
             Packet.Type.CONNECT -> {
                 val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
-                val success = packetData?.element?.let { DefaultParser.JSON.decodeFromJsonElement<ConnectSuccess>(it) }
+                val success = packetData?.decodeJsonOrNull<ConnectSuccess>()
                 id = success?.sid
-                outgoing.value = Channel(capacity = Channel.UNLIMITED)
+                outgoingChannel.value = Channel(capacity = Channel.UNLIMITED)
                 active = true
                 _connected.value = true
                 _events.emit(Event.Connect)
@@ -182,7 +184,7 @@ internal class SocketImpl(
 
             Packet.Type.CONNECT_ERROR -> {
                 val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
-                val error = packetData?.element?.let { DefaultParser.JSON.decodeFromJsonElement<ConnectError>(it) }
+                val error = packetData?.decodeJsonOrNull<ConnectError>()
                 val e = SocketIOConnectException(error?.message ?: "Unknown error")
                 _events.emit(Event.ConnectError(e))
                 throw e
@@ -196,23 +198,25 @@ internal class SocketImpl(
         }
     }
 
-    override suspend fun disconnect() {
-        if (_connected.value.not()) return
+    override fun disconnect(): Job {
+        if (_connected.value.not()) return Job().apply { complete() }
         _connected.value = false
         active = false
-        _events.emit(Event.Disconnect("io client disconnect", null))
-        outgoing.value?.send(Packet(Packet.Type.DISCONNECT, namespace))
-        outgoing.value?.close()
+        return scope.launch {
+            _events.emit(Event.Disconnect("io client disconnect", null))
+            outgoingChannel.value?.send(Packet(Packet.Type.DISCONNECT, namespace))
+            outgoingChannel.value?.close()
+        }
     }
 
-    override suspend fun send(event: String, vararg args: Packet.Data) {
+    override fun send(event: String, vararg args: Packet.Data): Job {
         check(active) { "Socket is not active" }
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
             data = dataOf(event) + args.toList(),
         )
-        outgoing.value?.send(packet)
+        return sendPacket(packet)
     }
 
     override suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data> {
@@ -223,18 +227,22 @@ internal class SocketImpl(
             data = dataOf(event) + args.toList(),
             ackId = ackId++,
         )
-        val ackPacket = sendPacketWithAck(packet)
-        return ackPacket.data ?: emptyList()
+        val ackPacket = scope.async { sendPacketWithAck(packet) }
+        return ackPacket.await().data ?: emptyList()
     }
 
     private suspend fun sendPacketWithAck(packet: Packet): Packet = coroutineScope {
         val ackPacket = async(start = CoroutineStart.UNDISPATCHED) {
-            incoming
+            incomingFlow
                 .filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
                 .first { it.ackId == packet.ackId }
         }
-        outgoing.value?.send(packet)
+        sendPacket(packet)
         ackPacket.await()
+    }
+
+    private fun sendPacket(packet: Packet): Job = scope.launch(outgoingDispatcher) {
+        outgoingChannel.value?.send(packet)
     }
 }
 

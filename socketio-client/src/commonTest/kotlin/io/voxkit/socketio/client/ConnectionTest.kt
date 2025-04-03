@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -64,7 +63,7 @@ class ConnectionTest {
     fun testConnectToDefaultNamespace() = runTest(timeout = timeout) {
         val socket = socket()
 
-        connectSocket(socket)
+        socket.connectOrThrow()
 
         assertTrue(socket.connected, "Socket should be connected to the default namespace")
 
@@ -76,8 +75,8 @@ class ConnectionTest {
         val socket1 = socket()
         val socket2 = socket()
 
-        connectSocket(socket1)
-        connectSocket(socket2)
+        socket1.connectOrThrow()
+        socket2.connectOrThrow()
 
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
@@ -92,8 +91,8 @@ class ConnectionTest {
         val socket1 = socket(queryString = "param1=value1")
         val socket2 = socket(queryString = "param2=value2")
 
-        connectSocket(socket1)
-        connectSocket(socket2)
+        socket1.connectOrThrow()
+        socket2.connectOrThrow()
 
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
@@ -111,9 +110,9 @@ class ConnectionTest {
             val ev = socket.on("ack").first()
             ev.ack?.invoke(*argsOf(5, mapOf("test" to true)))
         }
-        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
+        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("ackBack") }
 
-        connectSocket(socket)
+        socket.connectOrThrow()
         socket.send("callAck")
 
         val ackBack = ackBackDeferred.await()
@@ -128,7 +127,7 @@ class ConnectionTest {
     @Test
     fun testReceiveDateWithAck() = runTest(timeout = timeout) {
         val socket = socket()
-        connectSocket(socket)
+        socket.connectOrThrow()
 
         val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
 
@@ -146,12 +145,12 @@ class ConnectionTest {
         val socket = socket()
 
         launch(start = CoroutineStart.UNDISPATCHED) {
-            val ev = socket.on("ack").first()
+            val ev = socket.once("ack")
             ev.ack?.invoke(*argsOf(buf))
         }
-        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
+        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("ackBack") }
 
-        connectSocket(socket)
+        socket.connectOrThrow()
         socket.send("callAckBinary")
 
         val binaryAckBack = ackBackDeferred.await()
@@ -166,7 +165,7 @@ class ConnectionTest {
     fun testReceiveBinaryAck() = runTest(timeout = timeout) {
         val buf = "huehue".encodeToByteArray()
         val socket = socket()
-        connectSocket(socket)
+        socket.connectOrThrow()
 
         val binaryAck = socket.sendWithAck("getAckBinary", *argsOf(""))
 
@@ -178,9 +177,9 @@ class ConnectionTest {
     @Test
     fun testWorkingWithFalse() = runTest(timeout = timeout) {
         val socket = socket()
-        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("echoBack").first() }
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
 
-        connectSocket(socket)
+        socket.connectOrThrow()
         socket.send("echo", *argsOf(false))
 
         val echoBack = echoBackDeferred.await()
@@ -204,7 +203,7 @@ class ConnectionTest {
             socket.on("echoBack").take(expected.size).toList()
         }
 
-        connectSocket(socket)
+        socket.connectOrThrow()
         expected.forEach { str -> socket.send("echo", *argsOf(str)) }
 
         val echoBacks = echoBackDeferred.await()
@@ -217,15 +216,15 @@ class ConnectionTest {
     fun testConnectToNamespaceAfterConnectionEstablished() = runTest(timeout = timeout) {
         val socket = socket()
 
-        val job = launch {
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
             socket.once<Socket.Event.Connect>()
             val foo = socket("/foo")
-            connectSocket(foo)
+            foo.connectOrThrow()
             foo.disconnect()
             socket.disconnect()
         }
 
-        launch { connectSocket(socket) }
+        socket.connectOrThrow()
 
         job.join()
     }
@@ -237,12 +236,12 @@ class ConnectionTest {
         val job = launch {
             socket.once<Socket.Event.Disconnect>()
             val foo = socket("/foo")
-            connectSocket(foo)
+            foo.connectOrThrow()
             foo.disconnect()
         }
 
         launch {
-            connectSocket(socket)
+            socket.connectOrThrow()
             socket.disconnect()
         }
 
@@ -250,11 +249,6 @@ class ConnectionTest {
     }
 
     private suspend fun socket(namespace: String = "/", queryString: String = ""): Socket {
-        return withContext(Dispatchers.Default) { io.socket("${serverUrl}$namespace?$queryString") }
-    }
-
-    // Socket.connect() wrapper for using realtime timeouts
-    private suspend fun connectSocket(socket: Socket) = withContext(Dispatchers.Default) {
-        socket.connect()
+        return io.socket("${serverUrl}$namespace?$queryString")
     }
 }
