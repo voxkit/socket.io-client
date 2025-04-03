@@ -4,6 +4,7 @@ import io.ktor.client.*
 import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.socketio.client.util.argsOf
+import io.voxkit.socketio.client.util.bytesOrNull
 import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.LoggingLevel
@@ -21,6 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
@@ -108,5 +110,23 @@ class ConnectionTest {
         val date = dateString?.runCatching { Instant.parse(this) }?.getOrNull()
         assertNotNull(dateString, "Date string should not be null")
         assertNotNull(date, "Date string should be a valid date")
+    }
+
+    @Test
+    fun testSendBinaryAck() = runTest(timeout = timeout) {
+        val buf = "huehue".encodeToByteArray()
+        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            val ev = socket.on("ack").first()
+            ev.ack?.invoke(*argsOf(buf))
+        }
+        val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
+        socket.send("callAckBinary")
+
+        val binaryAckBack = ackBackDeferred.await()
+
+        assertIs<Socket.Event.Custom>(binaryAckBack)
+        assertContentEquals(buf, binaryAckBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
     }
 }

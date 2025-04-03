@@ -221,29 +221,39 @@ internal class ManagerImpl(
 
     private suspend fun onEngineIOPacket(engineIoPacket: EngineIOPacket, next: ReceiveChannel<EngineIOPacket>) {
         when (engineIoPacket) {
-            is EngineIOPacket.Binary -> {
-                var decoded = parser.decode(engineIoPacket.data)
-                while (decoded !is Parser.Decoded.Completed) {
-                    val nextEngineIoPacket = next.receive()
-                    check(nextEngineIoPacket is EngineIOPacket.Binary)
-                    decoded = parser.decode(nextEngineIoPacket.data, decoded as Parser.Decoded.Partial)
-                }
-                _incoming.emit(decoded.packet)
-                logger.d { "client <== server: ${decoded.packet}" }
-            }
-
             is EngineIOPacket.Message -> {
-                val packet = parser.decode(engineIoPacket.data)
-                _incoming.emit(packet)
+                val packet = runCatching { decodeEngineIOPacket(engineIoPacket, next) }
+                    .getOrElse {
+                        logger.w(it) { "Failed to decode engine.io packet: $engineIoPacket. Discard it." }
+                        return
+                    }
                 logger.d { "client <== server: $packet" }
+                _incoming.emit(packet)
             }
 
             is EngineIOPacket.Ping -> _events.emit(Manager.Event.Ping)
 
-            else -> {
-                // ignore other packets
-            }
+            else -> logger.w { "Discard unexpected engine.io packet: $engineIoPacket" }
         }
+    }
+
+    private suspend fun decodeEngineIOPacket(
+        engineIoPacket: EngineIOPacket.Message,
+        next: ReceiveChannel<EngineIOPacket>
+    ): Packet {
+        var packet = parser.decode(engineIoPacket.data)
+
+        if (packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
+            var decoded: Parser.Decoded = Parser.Decoded.Partial(packet)
+            while (decoded !is Parser.Decoded.Completed) {
+                val nextEngineIoPacket = next.receive()
+                check(nextEngineIoPacket is EngineIOPacket.Binary)
+                decoded = parser.decodeBinary(nextEngineIoPacket.data, decoded)
+            }
+            packet = decoded.packet
+        }
+
+        return packet
     }
 
     override suspend fun socket(namespace: String, auth: AuthSocketOption?): Socket {
@@ -266,7 +276,11 @@ internal class ManagerImpl(
         val session = checkNotNull(engineIOSession)
 
         when (val encoded = parser.encode(packet)) {
-            is Parser.Encoded.Binary -> encoded.data.forEach { session.send(it) }
+            is Parser.Encoded.Binary -> {
+                session.send(encoded.buffers[0].decodeToString())
+                encoded.buffers.drop(1).forEach { session.send(it) }
+            }
+
             is Parser.Encoded.Text -> session.send(encoded.data)
         }
     }

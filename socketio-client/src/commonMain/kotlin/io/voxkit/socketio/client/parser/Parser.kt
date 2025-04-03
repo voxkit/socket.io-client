@@ -20,9 +20,9 @@ internal interface Parser {
      * Decodes a Socket.IO packet from a byte array.
      *
      * @param bytes The byte array to decode.
-     * @param partial Optional partial decoded packet. If null `bytes` are considered a first chunk of a packet.
+     * @param partial Partial decoded packet.`.
      */
-    fun decode(bytes: ByteArray, partial: Decoded.Partial? = null): Decoded
+    fun decodeBinary(bytes: ByteArray, partial: Decoded): Decoded
 
     /**
      * Encoded representation of a Socket.IO packet.
@@ -36,7 +36,7 @@ internal interface Parser {
         /**
          * Encoded packet as a binary event or acknowledgment.
          */
-        data class Binary(val data: List<ByteArray>) : Encoded
+        data class Binary(val data: String, val buffers: List<ByteArray>) : Encoded
     }
 
     /**

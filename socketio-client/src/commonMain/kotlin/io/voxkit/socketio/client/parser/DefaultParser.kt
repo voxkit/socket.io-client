@@ -17,17 +17,17 @@ import kotlinx.serialization.json.JsonPrimitive
 internal class DefaultParser : Parser {
     override fun encode(packet: Packet): Parser.Encoded {
         return when (packet.type) {
-            Packet.Type.BINARY_EVENT, Packet.Type.BINARY_ACK -> Parser.Encoded.Binary(encodeAsBinary(packet))
+            Packet.Type.BINARY_EVENT, Packet.Type.BINARY_ACK -> encodeAsBinary(packet)
             else -> Parser.Encoded.Text(encodeAsText(packet))
         }
     }
 
-    private fun encodeAsBinary(packet: Packet): List<ByteArray> {
+    private fun encodeAsBinary(packet: Packet): Parser.Encoded.Binary {
         checkNotNull(packet.data) { "Packet data cannot be null for binary encoding" }
         val text = encodeAsText(packet)
         val buffers = packet.data.mapNotNull { (it as? Packet.Data.Binary)?.buffer }
         check(buffers.isNotEmpty()) { "No binary data found in packet" }
-        return listOf(text.toByteArray()) + buffers
+        return Parser.Encoded.Binary(text, listOf(text.toByteArray()) + buffers)
     }
 
     /**
@@ -52,7 +52,11 @@ internal class DefaultParser : Parser {
 
             // JSON-stringified payload without binary
             dataWithPlaceholders?.let { elements ->
-                if (elements.size == 1 && elements[0] !is JsonPrimitive) {
+                if (
+                    elements.size == 1 &&
+                    elements[0] !is JsonPrimitive &&
+                    elements[0].isAttachmentPlaceholder.not()
+                ) {
                     append(Json.encodeToString(elements[0]))
                 } else {
                     append(Json.encodeToString(elements))
@@ -78,27 +82,12 @@ internal class DefaultParser : Parser {
 
     override fun decode(text: String): Packet = decodeText(text)
 
-    override fun decode(bytes: ByteArray, partial: Parser.Decoded.Partial?): Parser.Decoded {
-        return if (partial == null) decodeFirstChunk(bytes) else decodeNextChunk(partial, bytes)
-    }
-
-    private fun decodeFirstChunk(bytes: ByteArray): Parser.Decoded.Partial {
-        val packet = decodeText(bytes.decodeToString())
-        require(packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
-            "Invalid packet type for binary data: ${packet.type}"
-        }
-        return Parser.Decoded.Partial(packet)
-    }
-
-    private fun decodeNextChunk(partial: Parser.Decoded.Partial, bytes: ByteArray): Parser.Decoded {
+    override fun decodeBinary(bytes: ByteArray, partial: Parser.Decoded): Parser.Decoded {
+        if (partial !is Parser.Decoded.Partial) return partial
         val placeholdersCount = partial.packet.placeholdersCount
         require(placeholdersCount > 0) { "No placeholders found in the packet for binary data" }
         val packet = partial.packet.copy(data = replacePlaceholder(partial.packet.data, bytes))
-        return if (placeholdersCount == 1) {
-            Parser.Decoded.Completed(packet)
-        } else {
-            Parser.Decoded.Partial(packet)
-        }
+        return if (placeholdersCount == 1) Parser.Decoded.Completed(packet) else Parser.Decoded.Partial(packet)
     }
 
     private fun replacePlaceholder(data: List<Packet.Data>?, bytes: ByteArray): List<Packet.Data>? {

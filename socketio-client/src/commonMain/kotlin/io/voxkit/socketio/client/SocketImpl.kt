@@ -117,9 +117,10 @@ internal class SocketImpl(
             }
 
             val ack = ackId?.let {
-                Socket.Ack {
-                    val ackType = if (type == Packet.Type.EVENT) Packet.Type.ACK else Packet.Type.BINARY_ACK
-                    val ackPacket = Packet(ackType, namespace, it.toList(), ackId)
+                Socket.Ack { args ->
+                    val hasBinaryData = args.any { it is Packet.Data.Binary }
+                    val ackType = if (hasBinaryData) Packet.Type.BINARY_ACK else Packet.Type.ACK
+                    val ackPacket = Packet(ackType, namespace, args.toList(), ackId)
                     outgoing.send(ackPacket)
                 }
             }
@@ -135,7 +136,6 @@ internal class SocketImpl(
         }
     }
 
-
     override suspend fun connect() = coroutineScope {
         manager.connect()
 
@@ -147,7 +147,7 @@ internal class SocketImpl(
 
         manager.send(Packet(Packet.Type.CONNECT, namespace, data))
 
-        val ack = try {
+        val connectResult = try {
             withTimeout(manager.options.timeout) { connectAck.await() }
         } catch (e: TimeoutCancellationException) {
             val exception = SocketIOConnectException("Connection timed out")
@@ -155,9 +155,9 @@ internal class SocketImpl(
             throw e
         }
 
-        when (ack.type) {
+        when (connectResult.type) {
             Packet.Type.CONNECT -> {
-                val packetData = ack.data?.firstOrNull() as? Packet.Data.Json
+                val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
                 val success = packetData?.element?.let { DefaultParser.JSON.decodeFromJsonElement<ConnectSuccess>(it) }
                 id = success?.sid
                 active = true
@@ -166,7 +166,7 @@ internal class SocketImpl(
             }
 
             Packet.Type.CONNECT_ERROR -> {
-                val packetData = ack.data?.firstOrNull() as? Packet.Data.Json
+                val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
                 val error = packetData?.element?.let { DefaultParser.JSON.decodeFromJsonElement<ConnectError>(it) }
                 val e = SocketIOConnectException(error?.message ?: "Unknown error")
                 _events.emit(Event.ConnectError(e))
@@ -174,7 +174,7 @@ internal class SocketImpl(
             }
 
             else -> {
-                val e = SocketIOConnectException("Unexpected packet type: ${ack.type}")
+                val e = SocketIOConnectException("Unexpected packet type: ${connectResult.type}")
                 _events.emit(Event.ConnectError(e))
                 throw e
             }
