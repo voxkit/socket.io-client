@@ -3,6 +3,7 @@ package io.voxkit.socketio.client.util
 import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 
 /**
@@ -166,3 +167,21 @@ public val Packet.Data.bytesOrNull: ByteArray? get() = (this as? Packet.Data.Bin
  */
 public val Packet.Data.bytes: ByteArray
     get() = (this as? Packet.Data.Binary)?.buffer ?: error("Not a binary element")
+
+/**
+ * Decodes the JSON element from a [Packet.Data] instance into the specified type.
+ *
+ * @return The decoded object of type [T]  if the [Packet.Data] instance is of type [Packet.Data.Json] or `null`.
+ */
+public inline fun <reified T> Packet.Data.decodeJsonOrNull(): T? {
+    return jsonElementOrNull?.let { DefaultParser.JSON.decodeFromJsonElement<T>(it) }
+}
+
+/**
+ * Decodes the JSON element from a [Packet.Data] instance into the specified type.
+ *
+ * @throws IllegalStateException if the [Packet.Data] instance is not of type [Packet.Data.Json].
+ */
+public inline fun <reified T> Packet.Data.decodeJson(): T {
+    return jsonElement.let { DefaultParser.JSON.decodeFromJsonElement<T>(it) }
+}

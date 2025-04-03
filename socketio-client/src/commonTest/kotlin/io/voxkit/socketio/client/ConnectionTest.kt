@@ -5,6 +5,7 @@ import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIOHttpClient
 import io.voxkit.socketio.client.util.argsOf
 import io.voxkit.socketio.client.util.bytesOrNull
+import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.LoggingLevel
@@ -57,15 +58,15 @@ class ConnectionTest {
 
     @Test
     fun testConnectToDefaultNamespace() = runTest(timeout = timeout) {
-        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+        val socket = socket()
 
         assertTrue(socket.connected, "Socket should be connected to the default namespace")
     }
 
     @Test
     fun testTwoSocketsWithSameNamespace() = runTest(timeout = timeout) {
-        val socket1 = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
-        val socket2 = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+        val socket1 = socket()
+        val socket2 = socket()
 
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
@@ -84,7 +85,7 @@ class ConnectionTest {
 
     @Test
     fun testSendAck() = runTest(timeout = timeout) {
-        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+        val socket = socket()
 
         launch(start = CoroutineStart.UNDISPATCHED) {
             val ev = socket.on("ack").first()
@@ -102,7 +103,7 @@ class ConnectionTest {
 
     @Test
     fun testReceiveDateWithAck() = runTest(timeout = timeout) {
-        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+        val socket = socket()
 
         val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
 
@@ -115,7 +116,7 @@ class ConnectionTest {
     @Test
     fun testSendBinaryAck() = runTest(timeout = timeout) {
         val buf = "huehue".encodeToByteArray()
-        val socket = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/") }
+        val socket = socket()
 
         launch(start = CoroutineStart.UNDISPATCHED) {
             val ev = socket.on("ack").first()
@@ -128,5 +129,30 @@ class ConnectionTest {
 
         assertIs<Socket.Event.Custom>(binaryAckBack)
         assertContentEquals(buf, binaryAckBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+    }
+
+    @Test
+    fun testReceiveBinaryAck() = runTest(timeout = timeout) {
+        val buf = "huehue".encodeToByteArray()
+        val socket = socket()
+
+        val binaryAck = socket.sendWithAck("getAckBinary", *argsOf(""))
+
+        assertContentEquals(buf, binaryAck[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+    }
+
+    @Test
+    fun testWorkingWithFalse() = runTest(timeout = timeout) {
+        val socket = socket()
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("echoBack").first() }
+
+        socket.send("echo", *argsOf(false))
+
+        val echoBack = echoBackDeferred.await()
+        assertEquals(false, echoBack.args[0].decodeJsonOrNull<Boolean>())
+    }
+
+    private suspend fun socket(namespace: String = "/"): Socket {
+        return withContext(Dispatchers.Default) { io.socket("http://localhost:3000$namespace") }
     }
 }
