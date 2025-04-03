@@ -21,7 +21,7 @@ public interface Manager {
     /**
      * Creates a new [Socket]] for the given namespace.
      */
-    public suspend fun socket(namespace: String, auth: AuthSocketOption? = null): Socket
+    public fun socket(namespace: String, auth: AuthSocketOption? = null): Socket
 
     /**
      * Sends Socket.IO [Packet] to server by underlying Engine.IO client.

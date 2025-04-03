@@ -66,6 +66,8 @@ internal class ManagerImpl(
         observeConnectedSockets()
         startReconnectionLoop()
 
+        scope.launch { if (options.autoConnect) connect() }
+
         scope.launch {
             try {
                 awaitCancellation()
@@ -256,12 +258,8 @@ internal class ManagerImpl(
         return packet
     }
 
-    override suspend fun socket(namespace: String, auth: AuthSocketOption?): Socket {
-        val socket = sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerFactory) }
-        if (options.autoConnect) {
-            socket.connect()
-        }
-        return socket
+    override fun socket(namespace: String, auth: AuthSocketOption?): Socket {
+        return sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerFactory) }
     }
 
     override suspend fun send(packet: Packet) {

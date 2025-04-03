@@ -59,6 +59,8 @@ class ConnectionTest {
     fun testConnectToDefaultNamespace() = runTest(timeout = timeout) {
         val socket = socket()
 
+        connectSocket(socket)
+
         assertTrue(socket.connected, "Socket should be connected to the default namespace")
 
         socket.close()
@@ -68,6 +70,9 @@ class ConnectionTest {
     fun testTwoSocketsWithSameNamespace() = runTest(timeout = timeout) {
         val socket1 = socket()
         val socket2 = socket()
+
+        connectSocket(socket1)
+        connectSocket(socket2)
 
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
@@ -79,8 +84,11 @@ class ConnectionTest {
 
     @Test
     fun testTwoSocketsWithSameNamespaceAndDifferentQueryStrings() = runTest(timeout = timeout) {
-        val socket1 = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/?param1=value1") }
-        val socket2 = withContext(Dispatchers.Default) { io.socket("http://localhost:3000/?param2=value2") }
+        val socket1 = socket(queryString = "param1=value1")
+        val socket2 = socket(queryString = "param2=value2")
+
+        connectSocket(socket1)
+        connectSocket(socket2)
 
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
@@ -99,6 +107,8 @@ class ConnectionTest {
             ev.ack?.invoke(*argsOf(5, mapOf("test" to true)))
         }
         val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
+
+        connectSocket(socket)
         socket.send("callAck")
 
         val ackBack = ackBackDeferred.await()
@@ -113,6 +123,7 @@ class ConnectionTest {
     @Test
     fun testReceiveDateWithAck() = runTest(timeout = timeout) {
         val socket = socket()
+        connectSocket(socket)
 
         val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
 
@@ -134,6 +145,8 @@ class ConnectionTest {
             ev.ack?.invoke(*argsOf(buf))
         }
         val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("ackBack").first() }
+
+        connectSocket(socket)
         socket.send("callAckBinary")
 
         val binaryAckBack = ackBackDeferred.await()
@@ -148,6 +161,7 @@ class ConnectionTest {
     fun testReceiveBinaryAck() = runTest(timeout = timeout) {
         val buf = "huehue".encodeToByteArray()
         val socket = socket()
+        connectSocket(socket)
 
         val binaryAck = socket.sendWithAck("getAckBinary", *argsOf(""))
 
@@ -161,6 +175,7 @@ class ConnectionTest {
         val socket = socket()
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.on("echoBack").first() }
 
+        connectSocket(socket)
         socket.send("echo", *argsOf(false))
 
         val echoBack = echoBackDeferred.await()
@@ -169,7 +184,11 @@ class ConnectionTest {
         socket.close()
     }
 
-    private suspend fun socket(namespace: String = "/"): Socket {
-        return withContext(Dispatchers.Default) { io.socket("http://localhost:3000$namespace") }
+    private suspend fun socket(namespace: String = "/", queryString: String  = ""): Socket {
+        return withContext(Dispatchers.Default) { io.socket("http://localhost:3000$namespace?$queryString") }
+    }
+
+    private suspend fun connectSocket(socket: Socket) = withContext(Dispatchers.Default) {
+        socket.connect()
     }
 }
