@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
@@ -30,10 +31,14 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class ConnectionTest {
+    private val serverPort = 3000
+    private val serverUrl = "http://localhost:$serverPort"
     private val timeout = 10.seconds
+
     private lateinit var io: IO
     private lateinit var httpClient: HttpClient
 
@@ -210,10 +215,28 @@ class ConnectionTest {
         socket.close()
     }
 
-    private suspend fun socket(namespace: String = "/", queryString: String = ""): Socket {
-        return withContext(Dispatchers.Default) { io.socket("http://localhost:3000$namespace?$queryString") }
+    @Test
+    fun testConnectToNamespaceAfterConnectionEstablished() = runTest(timeout = timeout) {
+        val socket = socket()
+
+        val job = launch {
+            socket.on<Socket.Event.Connect>().first()
+            val foo = socket("/foo")
+            connectSocket(foo)
+            foo.close()
+            socket.close()
+        }
+
+        launch { connectSocket(socket) }
+
+        job.join()
     }
 
+    private suspend fun socket(namespace: String = "/", queryString: String = ""): Socket {
+        return withContext(Dispatchers.Default) { io.socket("${serverUrl}$namespace?$queryString") }
+    }
+
+    // Socket.connect() wrapper for using realtime timeouts
     private suspend fun connectSocket(socket: Socket) = withContext(Dispatchers.Default) {
         socket.connect()
     }
