@@ -1,7 +1,7 @@
 package io.voxkit.socketio.client
 
 import io.voxkit.engineio.client.DisconnectReason
-import io.voxkit.socketio.client.Manager.State
+import io.voxkit.socketio.client.Socket.Ack
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.Packet
 import io.voxkit.socketio.client.util.dataOf
@@ -9,27 +9,31 @@ import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.client.util.jsonElementOrNull
 import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonPrimitive
+import kotlin.coroutines.coroutineContext
 
 internal class VKSocket(
     private val namespace: String,
@@ -39,89 +43,43 @@ internal class VKSocket(
     loggerFactory: VoxKitLoggerFactory,
 ) : Socket {
 
-    override var active: Boolean = false
-        private set
-
-    private var _connected = MutableStateFlow(false)
-    override val connected: Boolean get() = _connected.value && manager.state.value == State.Connected
-
-    override val disconnected: Boolean get() = connected.not()
-
     override var id: String? = null
         private set
 
-    override val io: Manager = manager
+    override val active: Boolean
+        get() {
+            val currentState = state.value
+            if (currentState !is State.Disconnected) return true
 
+            return when (currentState.reason) {
+                DisconnectReason.CLIENT_DISCONNECT,
+                DisconnectReason.SERVER_DISCONNECT -> false
+
+                else -> true
+            }
+        }
+
+    override val connected: Boolean get() = state.value == State.Connected && manager.connected
+    override val disconnected: Boolean get() = connected.not()
+    override val io: Manager = manager
     override val recovered: Boolean get() = manager.recovered
 
     private val _events = MutableSharedFlow<Event>()
-    override val events: Flow<Event> = merge(_events, manager.incoming.customEvents())
+    override val events: Flow<Event> by lazy { merge(_events, incomingPackets.customEvents()) }
 
-    private val logger = loggerFactory.createLogger("socket.io [$namespace]")
+    private val logger = loggerFactory.createLogger("Socket@${hashCode()} [$namespace]")
+    private val job = SupervisorJob() + CoroutineName("Socket@${hashCode()}")
 
     // TODO: atomic
     private var ackId = 0L
-    private val incomingFlow = manager.incoming.filter { it.namespace == namespace }
-    private val outgoingChannel = MutableStateFlow<Channel<Packet>?>(null)
-    private val outgoingDispatcher = Dispatchers.Default.limitedParallelism(1, "OutgoingDispatcher")
+    private val incomingPackets = manager.incoming.filter { it.namespace == namespace }
+    private val outgoingPackets = Channel<Packet>(capacity = Channel.UNLIMITED)
+    private val mutex = Mutex()
+    private val state = MutableStateFlow<State>(State.New)
 
     init {
-        startConnectionLoop()
-        startSendingPackets()
-
-        scope.launch {
-            try {
-                awaitCancellation()
-            } finally {
-                outgoingChannel.value?.cancel()
-            }
-        }
-    }
-
-    private fun startConnectionLoop() {
-        scope.launch {
-            manager.state.first { it is State.Connected }
-
-            while (true) {
-                val disconnected = manager.state.first { it is State.Disconnected } as State.Disconnected
-                if (_connected.value) {
-                    _events.emit(Event.Disconnect(disconnected.reason, disconnected.cause))
-                    _connected.value = false
-                }
-                manager.state.first { it is State.Connected }
-                if (active) runCatching { connect() }
-            }
-        }
-    }
-
-    private fun startSendingPackets() {
-        suspend fun sendPacketToManager(packet: Packet) {
-            if (_connected.value.not()) {
-                logger.d { "Send packet. Manager is not connected yet. Wait for connection." }
-            }
-
-            _connected.first { it }
-            logger.d { "Send packet: $packet" }
-
-            runCatching {
-                manager.send(packet)
-            }.onFailure {
-                logger.w(it) { "Sending packet failed. Will try to send it again." }
-                sendPacketToManager(packet)
-            }
-        }
-
-        scope.launch {
-            outgoingChannel.filterNotNull().collect { channel ->
-                logger.d { "New outgoing packets channel created." }
-                runCatching {
-                    for (packet in channel) {
-                        sendPacketToManager(packet)
-                    }
-                }
-                logger.d { "Outgoing packets channel closed." }
-            }
-        }
+        launchSendingPackets()
+        launchReceivingConnectionPackets()
     }
 
     private fun Flow<Packet>.customEvents(): Flow<Event> {
@@ -134,11 +92,11 @@ internal class VKSocket(
             }
 
             val ack = ackId?.let {
-                Socket.Ack { args ->
+                Ack { args ->
                     val hasBinaryData = args.any { it is Packet.Data.Binary }
                     val ackType = if (hasBinaryData) Packet.Type.BINARY_ACK else Packet.Type.ACK
                     val ackPacket = Packet(ackType, namespace, args.toList(), ackId)
-                    outgoingChannel.value?.send(ackPacket)
+                    outgoingPackets.send(ackPacket)
                 }
             }
 
@@ -153,88 +111,147 @@ internal class VKSocket(
         }
     }
 
-    override fun connect(): Job = scope.launch {
-        manager.connect()
-
-        val data = auth?.let { dataOf(mapOf(it.paramName to JsonPrimitive(it.token))) }
-
-        val connectAck = async(start = CoroutineStart.UNDISPATCHED) {
-            incomingFlow.first { it.type == Packet.Type.CONNECT || it.type == Packet.Type.CONNECT_ERROR }
-        }
-
-        manager.send(Packet(Packet.Type.CONNECT, namespace, data))
-
-        val connectResult = try {
-            withTimeout(manager.options.timeout) { connectAck.await() }
-        } catch (e: TimeoutCancellationException) {
-            val exception = SocketConnectException("Connection timed out")
-            _events.emit(Event.ConnectError(exception))
-            throw e
-        }
-
-        when (connectResult.type) {
-            Packet.Type.CONNECT -> {
-                val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
-                val success = packetData?.decodeJsonOrNull<ConnectSuccess>()
-                id = success?.sid
-                outgoingChannel.value = Channel(capacity = Channel.UNLIMITED)
-                active = true
-                _connected.value = true
-                _events.emit(Event.Connect)
-            }
-
-            Packet.Type.CONNECT_ERROR -> {
-                val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
-                val error = packetData?.decodeJsonOrNull<ConnectError>()
-                val e = SocketConnectException(error?.message ?: "Unknown error")
-                _events.emit(Event.ConnectError(e))
-                throw e
-            }
-
-            else -> {
-                val e = SocketConnectException("Unexpected packet type: ${connectResult.type}")
-                _events.emit(Event.ConnectError(e))
-                throw e
+    private fun launchSendingPackets() {
+        scope.launch(job) {
+            try {
+                for (packet in outgoingPackets) {
+                    state.first { it == State.Connected || it == State.Disconnecting }
+                    if (packet.type == Packet.Type.DISCONNECT) {
+                        state.value = State.Disconnected(
+                            DisconnectReason.CLIENT_DISCONNECT,
+                            CancellationException("Client disconnect")
+                        )
+                        _events.emit(Event.Disconnect(DisconnectReason.CLIENT_DISCONNECT, null))
+                    }
+                    sendPacketToManager(packet)
+                    if (packet.type == Packet.Type.DISCONNECT) {
+                        logger.d { "Socket disconnected." }
+                    }
+                }
+            } finally {
+                outgoingPackets.cancel()
             }
         }
     }
 
-    override fun disconnect(): Job {
-        if (_connected.value.not()) return Job().apply { complete() }
-        _connected.value = false
-        active = false
-        return scope.launch {
-            _events.emit(Event.Disconnect(DisconnectReason.CLIENT_REQUEST, null))
-            outgoingChannel.value?.send(Packet(Packet.Type.DISCONNECT, namespace))
-            outgoingChannel.value?.close()
+    private suspend fun sendPacketToManager(packet: Packet) {
+        var sent = false
+        while (sent.not()) {
+            logger.d { "Send packet: $packet" }
+            sent = runCatching {
+                manager.send(packet)
+                true
+            }.onFailure { e ->
+                if (e is CancellationException && coroutineContext.isActive.not()) throw e
+                logger.d(e) { "Sending packet failed. Will try to send it again." }
+            }.getOrElse { false }
         }
     }
 
-    override fun send(event: String, vararg args: Packet.Data): Job {
-        check(active) { "Socket is not active" }
-        val packet = Packet(
-            type = Packet.Type.EVENT,
-            namespace = namespace,
-            data = dataOf(event) + args.toList(),
-        )
-        return sendPacket(packet)
+    private fun launchReceivingConnectionPackets() {
+        scope.launch {
+            incomingPackets.collect { packet ->
+                when (packet.type) {
+                    Packet.Type.CONNECT -> onConnectSuccess(packet)
+                    Packet.Type.DISCONNECT -> TODO("Handling DISCONNECT packet is not implemented yet!!!!")
+                    Packet.Type.CONNECT_ERROR -> onConnectError(packet)
+                    else -> Unit // ignore other packets
+                }
+            }
+        }
     }
 
-    override suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data> {
-        check(active) { "Socket is not active" }
+    private suspend fun onConnectSuccess(packet: Packet) {
+        val packetData = packet.data?.firstOrNull() as? Packet.Data.Json
+        val success = packetData?.decodeJsonOrNull<ConnectSuccess>()
+        logger.d { "Socket connected to namespace [$namespace]. SID: ${success?.sid}" }
+        id = success?.sid
+        state.value = State.Connected
+        _events.emit(Event.Connect)
+    }
+
+    private suspend fun onConnectError(packet: Packet) {
+        val packetData = packet.data?.firstOrNull() as? Packet.Data.Json
+        val error = packetData?.decodeJsonOrNull<ConnectError>()
+        logger.d { "Socket connection to namespace [$namespace] failed: ${error?.message}" }
+        val e = SocketConnectException(error?.message ?: "Unknown error")
+        state.value = State.Disconnected(DisconnectReason.SERVER_DISCONNECT, e)
+        _events.emit(Event.ConnectError(e))
+    }
+
+    override suspend fun connect() = coroutineScope {
+        val connected = launch(job, start = CoroutineStart.UNDISPATCHED) {
+            state.filterIsInstance<State.Connected>().first()
+        }
+        val disconnected = async(job, start = CoroutineStart.UNDISPATCHED) {
+            state.filterIsInstance<State.Disconnected>().first()
+        }
+
+        connectAsync()
+
+        val result: Result<Unit> = select {
+            connected.onJoin { Result.success(Unit) }
+            disconnected.onAwait { Result.failure(it.cause) }
+        }
+        coroutineContext.cancelChildren()
+        result.getOrThrow()
+    }
+
+    private fun connectAsync() = scope.launch(job) {
+        if (state.value == State.Connecting || state.value == State.Connected) return@launch
+
+        mutex.withLock {
+            if (state.value != State.New && state.value !is State.Disconnected) return@launch
+            state.value = State.Connecting
+            logger.i { "Connect socket to namespace [$namespace]" }
+            sendConnectPacket()
+        }
+    }
+
+    suspend fun sendConnectPacket() {
+        runCatching {
+            val data = auth?.let { dataOf(mapOf(it.paramName to it.token)) }
+            manager.send(Packet(Packet.Type.CONNECT, namespace, data))
+        }
+    }
+
+    override suspend fun disconnect() {
+        disconnectAsync()
+        state.filterIsInstance<State.Disconnected>().first()
+    }
+
+    private fun disconnectAsync() = scope.launch(job) {
+        if (state.value == State.Disconnecting || state.value is State.Disconnected) return@launch
+
+        mutex.withLock {
+            if (state.value != State.Connecting && state.value != State.Connected) return@launch
+            state.value = State.Disconnecting
+
+            logger.d { "Disconnect socket" }
+            sendPacket(Packet(Packet.Type.DISCONNECT, namespace))
+        }
+    }
+
+    override suspend fun send(event: String, vararg args: Packet.Data) {
+        logger.i { "Send event: $event $args" }
+        val packet = Packet(type = Packet.Type.EVENT, namespace = namespace, data = dataOf(event) + args.toList())
+        sendPacket(packet)
+    }
+
+    override suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data> = coroutineScope {
+        logger.i { "Send event with ack: $event $args" }
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
             data = dataOf(event) + args.toList(),
             ackId = ackId++,
         )
-        val ackPacket = scope.async { sendPacketWithAck(packet) }
-        return ackPacket.await().data ?: emptyList()
+        sendPacketWithAck(packet).data ?: emptyList()
     }
 
     private suspend fun sendPacketWithAck(packet: Packet): Packet = coroutineScope {
         val ackPacket = async(start = CoroutineStart.UNDISPATCHED) {
-            incomingFlow
+            incomingPackets
                 .filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
                 .first { it.ackId == packet.ackId }
         }
@@ -242,8 +259,24 @@ internal class VKSocket(
         ackPacket.await()
     }
 
-    private fun sendPacket(packet: Packet): Job = scope.launch(outgoingDispatcher) {
-        outgoingChannel.value?.send(packet)
+    private suspend fun sendPacket(packet: Packet) {
+        outgoingPackets.send(packet)
+    }
+
+    fun close() {
+        logger.i { "Close socket" }
+        scope.launch {
+            disconnect()
+            job.cancel()
+        }
+    }
+
+    private interface State {
+        data object New : State
+        data object Connecting : State
+        data object Connected : State
+        data object Disconnecting : State
+        data class Disconnected(val reason: DisconnectReason, val cause: Throwable) : State
     }
 }
 

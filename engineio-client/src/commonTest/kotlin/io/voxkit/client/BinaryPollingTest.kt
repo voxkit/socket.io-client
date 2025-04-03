@@ -1,7 +1,7 @@
 package io.voxkit.client
 
+import io.voxkit.engineio.client.engineIO
 import io.voxkit.engineio.client.ioHttpClient
-import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
@@ -20,7 +20,7 @@ class BinaryPollingTest {
         val binaryData = ByteArray(5) { it.toByte() }
         val httpClient = ioHttpClient()
 
-        val session = httpClient.engineIOSession {
+        val session =  backgroundScope.engineIO(httpClient) {
             port = PORT
             transports = setOf(TransportType.POLLING)
             loggingLevel = LoggingLevel.DEBUG
@@ -46,7 +46,7 @@ class BinaryPollingTest {
         val utf8String = "cash money €€€"
         val httpClient = ioHttpClient()
 
-        val session = httpClient.engineIOSession {
+        val session =  backgroundScope.engineIO(httpClient) {
             port = PORT
             transports = setOf(TransportType.POLLING)
             loggingLevel = LoggingLevel.DEBUG

@@ -2,6 +2,7 @@ package io.voxkit.socketio.client
 
 import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.parser.Packet
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -28,6 +29,8 @@ public interface Manager {
      * Sends Socket.IO [Packet] to server by underlying Engine.IO client.
      */
     public suspend fun send(packet: Packet)
+
+    public fun close()
 
     public sealed interface Event {
         /**
@@ -63,12 +66,5 @@ public interface Manager {
          * Fired when couldn't reconnect within `reconnectionAttempts`.
          */
         public data object ReconnectionFailed : Event
-    }
-
-    public sealed interface State {
-        public data object New : State
-        public data object Connecting : State
-        public data object Connected : State
-        public data class Disconnected(val reason: DisconnectReason, val cause: Throwable?) : State
     }
 }

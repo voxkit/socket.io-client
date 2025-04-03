@@ -3,19 +3,20 @@ package io.voxkit.engineio.client
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.http.*
-import io.voxkit.engineio.client.transports.Transport
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.client.transports.pollingTransport
 import io.voxkit.engineio.client.transports.webSocketTransport
 import io.voxkit.engineio.parser.Packet
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 
 /**
  * Represents a session for Engine.IO.
  */
-public interface Engine : CoroutineScope {
+public interface Engine {
     /**
      * A session ID.
      */
@@ -37,6 +38,9 @@ public interface Engine : CoroutineScope {
      */
     public val call: StateFlow<HttpClientCall?>
 
+    /**
+     * A state of [Engine] session.
+     */
     public val state: StateFlow<State>
 
     /**
@@ -61,8 +65,6 @@ public interface Engine : CoroutineScope {
     public sealed interface State {
         public data object Opening : State
         public data object Open : State
-        public data object Upgrading : State
-        public data class Closing(val reason: DisconnectReason, val cause: Throwable?) : State
         public data class Closed(val reason: DisconnectReason, val cause: Throwable?) : State
     }
 }
@@ -72,59 +74,59 @@ public interface Engine : CoroutineScope {
  *
  * @param urlString The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
  * will be use websocket transport only.
+ * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public suspend fun HttpClient.engineIOSession(
+public fun CoroutineScope.engineIO(
     urlString: String,
+    httpClient: HttpClient,
     block: EngineOptionsBuilder.() -> Unit = {}
-): Engine = engineIOSession(Url(urlString), block)
+): Engine = engineIO(Url(urlString), httpClient, block)
 
 /**
  * Creates a new [Engine] using the provided `url` and `block` to configure the [EngineIOOptions].
  *
  * @param url The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
  * will be use websocket transport only.
+ * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public suspend fun HttpClient.engineIOSession(
+public fun CoroutineScope.engineIO(
     url: Url,
+    httpClient: HttpClient,
     block: EngineOptionsBuilder.() -> Unit = {}
 ): Engine {
     val options = EngineOptionsBuilder(url).apply(block).build()
-    return engineIOSession(options)
+    return engineIO(httpClient, options)
 }
 
 /**
  * Creates a new [Engine] using the provided [block] to configure the [EngineIOOptions].
  *
+ * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public suspend fun HttpClient.engineIOSession(block: EngineOptionsBuilder.() -> Unit = {}): Engine {
+public fun CoroutineScope.engineIO(httpClient: HttpClient, block: EngineOptionsBuilder.() -> Unit = {}): Engine {
     val options = EngineOptionsBuilder().apply(block).build()
-    return engineIOSession(options)
+    return engineIO(httpClient, options)
 }
 
-private suspend fun HttpClient.engineIOSession(options: EngineIOOptions): Engine {
-    val transportType = selectTransportType(options)
-    val transport = createTransport(transportType, options)
-    val handshakePacket = transport.incoming.receive()
-    return VKEngine(transport, options, handshakePacket, httpClient = this)
-}
-
-private suspend fun HttpClient.createTransport(
-    transportType: TransportType,
-    options: EngineIOOptions
-): Transport {
-    return when (transportType) {
-        TransportType.POLLING -> pollingTransport(options)
-        TransportType.WEBSOCKET -> webSocketTransport(options)
-    }
-}
-
-private fun selectTransportType(options: EngineIOOptions): TransportType {
-    return if (options.transports.contains(TransportType.POLLING)) {
+private fun CoroutineScope.engineIO(httpClient: HttpClient, options: EngineIOOptions): Engine {
+    val transportType = if (options.transports.contains(TransportType.POLLING)) {
         TransportType.POLLING
     } else {
         options.transports.first()
     }
+    val transport = when (transportType) {
+        TransportType.POLLING -> pollingTransport(httpClient, options)
+        TransportType.WEBSOCKET -> webSocketTransport(httpClient, options)
+    }
+    return VKEngine(initialTransport = transport, scope = this, options = options, httpClient = httpClient)
+}
+
+/**
+ * Awaits until the session is open.
+ */
+public suspend fun Engine.awaitOpen() {
+    state.first { it == Engine.State.Open }
 }

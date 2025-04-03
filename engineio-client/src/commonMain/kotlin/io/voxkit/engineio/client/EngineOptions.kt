@@ -9,6 +9,8 @@ import io.voxkit.socketio.logging.Logger
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import io.voxkit.socketio.logging.defaultLogger
 import io.voxkit.yeast.Yeast
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 public class EngineOptionsBuilder {
     /**
@@ -62,6 +64,8 @@ public class EngineOptionsBuilder {
 
     public var logger: Logger? = null
 
+    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
+
     internal fun build(): EngineIOOptions {
         require(transports.isNotEmpty()) { "At least one transport must be specified." }
 
@@ -73,7 +77,8 @@ public class EngineOptionsBuilder {
             parameters = parameters.apply { timestampParam?.let { append(it, Yeast.yeast()) } }.build(),
             headers = headers.build(),
             transports = transports,
-            loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel)
+            loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel),
+            dispatcher = dispatcher,
         )
     }
 }
@@ -108,6 +113,7 @@ internal class EngineIOOptions(
     val headers: Headers,
     val transports: Set<TransportType>,
     val loggerFactory: VoxKitLoggerFactory,
+    val dispatcher: CoroutineDispatcher,
 ) {
     internal fun buildRequest(transport: TransportType, sid: String?, builder: HttpRequestBuilder) {
         builder.url.protocol = when (transport) {

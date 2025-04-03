@@ -1,7 +1,7 @@
 package examples
 
 import io.voxkit.engineio.client.ioHttpClient
-import io.voxkit.engineio.client.engineIOSession
+import io.voxkit.engineio.client.engineIO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 
@@ -10,7 +10,7 @@ private const val PORT = 3000
 public fun main(): Unit = runBlocking {
     val process = ServerLauncher.startServer("echo", PORT)
     val httpClient = ioHttpClient()
-    val session = httpClient.engineIOSession {
+    val session = engineIO(httpClient) {
         port = PORT
     }
 

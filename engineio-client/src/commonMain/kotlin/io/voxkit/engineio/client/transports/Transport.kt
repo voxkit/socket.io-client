@@ -3,13 +3,14 @@ package io.voxkit.engineio.client.transports
 import io.ktor.client.call.*
 import io.voxkit.engineio.parser.Packet
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Transport interface for Engine.IO client.
  */
-internal interface Transport : CoroutineScope {
+internal interface Transport  {
     /**
      * Transport type.
      */
@@ -29,6 +30,8 @@ internal interface Transport : CoroutineScope {
 
     /**
      * Sends a packet to the Engine.IO server.
+     *
+     * @param packet The [Packet] to send.
      */
     suspend fun send(packet: Packet)
 

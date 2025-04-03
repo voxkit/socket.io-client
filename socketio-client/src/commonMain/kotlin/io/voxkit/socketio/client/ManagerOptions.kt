@@ -1,6 +1,7 @@
 package io.voxkit.socketio.client
 
 import io.ktor.http.*
+import io.voxkit.engineio.client.EngineOptionsBuilder
 import io.voxkit.engineio.client.transports.TransportType
 import kotlin.math.pow
 import kotlin.random.Random
@@ -108,6 +109,8 @@ public class ManagerOptionsBuilder {
         TransportType.WEBSOCKET
     )
 
+    public var engineOptions:EngineOptionsBuilder = EngineOptionsBuilder()
+
     public val socketBuilder: SocketOptionsBuilder = SocketOptionsBuilder()
 
     internal fun build(): ManagerOptions {
@@ -128,6 +131,7 @@ public class ManagerOptionsBuilder {
             timestampRequests = timestampRequests,
             transports = transports,
             socketOption = socketBuilder.build(),
+            engineOptions = engineOptions,
         )
     }
 }
@@ -147,6 +151,7 @@ internal data class ManagerOptions(
     val timestampRequests: Boolean,
     val transports: Set<TransportType>,
     val socketOption: SocketOptions,
+    val engineOptions: EngineOptionsBuilder,
 )
 
 internal fun ManagerOptions.calculateReconnectionDelay(attempt: Int): Duration {

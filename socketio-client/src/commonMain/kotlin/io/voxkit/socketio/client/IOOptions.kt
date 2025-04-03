@@ -1,11 +1,10 @@
 package io.voxkit.socketio.client
 
+import io.voxkit.engineio.client.EngineOptionsBuilder
 import io.voxkit.socketio.logging.LoggingLevel
 import io.voxkit.socketio.logging.Logger
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import io.voxkit.socketio.logging.defaultLogger
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 
 public class IOOptionsBuilder {
     /**
@@ -59,13 +58,13 @@ public class IOOptionsBuilder {
 
     public var logger: Logger? = null
 
-    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
+    public var engineOptions: EngineOptionsBuilder = EngineOptionsBuilder()
 
     internal fun build(): IOOptions {
         return IOOptions(
             forceNew = forceNew,
             loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel),
-            dispatcher = dispatcher,
+            engineOptions = engineOptions,
         )
     }
 }
@@ -73,5 +72,5 @@ public class IOOptionsBuilder {
 internal data class IOOptions(
     val forceNew: Boolean,
     val loggerFactory: VoxKitLoggerFactory,
-    val dispatcher: CoroutineDispatcher,
+    val engineOptions: EngineOptionsBuilder,
 )

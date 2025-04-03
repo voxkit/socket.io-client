@@ -2,7 +2,6 @@ package io.voxkit.socketio.client
 
 import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.parser.Packet
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
@@ -65,12 +64,12 @@ public interface Socket {
     /**
      * Manually connects the socket.
      */
-    public fun connect(): Job
+    public suspend fun connect()
 
     /**
      * Manually disconnects the socket.
      */
-    public fun disconnect(): Job
+    public suspend fun disconnect()
 
     /**
      * Sends an event to the socket.
@@ -78,7 +77,7 @@ public interface Socket {
      * @param event The event name to send.
      * @param args The arguments to send with the event.
      */
-    public fun send(event: String, vararg args: Packet.Data): Job
+    public suspend fun send(event: String, vararg args: Packet.Data)
 
     /**
      * Sends an event to the socket and waits for an acknowledgment from the server.
@@ -147,13 +146,6 @@ public interface Socket {
         public suspend operator fun invoke(vararg args: Packet.Data)
     }
 }
-
-/**
- * Connects the socket to the server
- *
- * @throws SocketConnectException if the connection fails
- */
-public suspend fun Socket.connectOrThrow(): Unit = connect().join()
 
 /**
  * Creates a flow of events filtered by the specified type `T` extending [Socket.Event].

@@ -7,77 +7,92 @@ import io.ktor.websocket.*
 import io.voxkit.engineio.client.EngineIOOptions
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.engineio.parser.Parser
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-internal suspend fun HttpClient.webSocketTransport(options: EngineIOOptions, sid: String? = null): Transport {
-    val incomingPackets = Channel<Packet>()
+internal fun CoroutineScope.webSocketTransport(
+    httpClient: HttpClient,
+    options: EngineIOOptions,
+    sid: String? = null
+): Transport {
+    return WebSocketTransport(this, httpClient, options, sid)
+}
 
-    val webSocketSession = runCatching {
-        webSocketSession { options.buildRequest(TransportType.WEBSOCKET, sid, builder = this) }
-    }
-        .onFailure { incomingPackets.cancel() }
-        .getOrThrow()
+private class WebSocketTransport(
+    private val scope: CoroutineScope,
+    private val httpClient: HttpClient,
+    private val options: EngineIOOptions,
+    private val sid: String?,
+) : Transport {
+    override val type: TransportType = TransportType.WEBSOCKET
 
-    val logger = options.loggerFactory.createLogger("websocket [${webSocketSession.hashCode()}]")
-    logger.d { "WebSocket transport stared." }
+    private val logger = options.loggerFactory.createLogger("engine.io websocket")
+    private var webSocketSession = MutableStateFlow<DefaultClientWebSocketSession?>(null)
+    private val job = SupervisorJob()
 
-    webSocketSession.launch {
-        try {
-            while (true) {
-                when (val frame = webSocketSession.incoming.receive()) {
-                    is Frame.Binary -> {
-                        val bytes = frame.readBytes()
-                        val packet = Parser.decodePacket(bytes)
-                        incomingPackets.send(packet)
-                    }
-
-                    is Frame.Text -> {
-                        val text = frame.readText()
-                        val packet = Parser.decodePacket(text)
-                        incomingPackets.send(packet)
-                    }
-
-                    else -> {
-                        // Ignore other frame types
-                    }
-                }
+    init {
+        logger.i { "WebSocket transport created." }
+        scope.launch(job) {
+            val session = httpClient.webSocketSession {
+                options.buildRequest(TransportType.WEBSOCKET, sid, builder = this)
             }
-        } catch (e: ClosedReceiveChannelException) {
-            logger.d { "WebSocket transport closed." }
-            incomingPackets.send(Packet.Close)
-            incomingPackets.cancel()
+            webSocketSession.value = session
+            _call.value = session.call
         }
     }
 
-    return object : Transport, CoroutineScope by webSocketSession {
-        override val type: TransportType = TransportType.WEBSOCKET
-        override val incoming: ReceiveChannel<Packet> = incomingPackets
-        override val call: StateFlow<HttpClientCall> = MutableStateFlow(webSocketSession.call).asStateFlow()
-
-        override suspend fun send(packet: Packet) {
-            runCatching {
-                when (val encodedPacket = Parser.encodePacket(packet)) {
-                    is ByteArray -> webSocketSession.send(encodedPacket)
-                    is String -> webSocketSession.send(encodedPacket)
-                    else -> logger.e { "Illegal packet type: $encodedPacket" }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val incoming: ReceiveChannel<Packet> = scope.produce(job + CoroutineName("incoming [websocket]")) {
+        val session = webSocketSession.filterNotNull().first()
+        while (true) {
+            when (val frame = session.incoming.receive()) {
+                is Frame.Binary -> {
+                    val bytes = frame.readBytes()
+                    val packet = Parser.decodePacket(bytes)
+                    send(packet)
                 }
-            }.onFailure { e ->
-                logger.w(e) { "Failed to send packet" }
-                incomingPackets.send(Packet.Error("Failed to send packet: ${e.message}"))
+
+                is Frame.Text -> {
+                    val text = frame.readText()
+                    val packet = Parser.decodePacket(text)
+                    send(packet)
+                }
+
+                else -> Unit // ignore other frame types
             }
         }
+    }
 
-        override fun close() {
-            incomingPackets.cancel()
-            webSocketSession.launch { webSocketSession.close() }
-            logger.d { "Transport $type closed" }
+    private val _call = MutableStateFlow<HttpClientCall?>(null)
+    override val call: StateFlow<HttpClientCall?> = _call.asStateFlow()
+
+    override suspend fun send(packet: Packet) {
+        val session = webSocketSession.filterNotNull().first()
+        when (val encodedPacket = Parser.encodePacket(packet)) {
+            is ByteArray -> session.send(encodedPacket)
+            is String -> session.send(encodedPacket)
+            else -> logger.e { "Illegal packet type: $encodedPacket" }
+        }
+    }
+
+    override fun close() {
+        logger.i { "Close WebSocket transport." }
+        scope.launch {
+            val session = webSocketSession.filterNotNull().first()
+            session.close()
+            job.cancel()
+            logger.d { "WebSocket transport closed" }
         }
     }
 }

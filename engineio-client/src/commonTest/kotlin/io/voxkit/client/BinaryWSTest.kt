@@ -1,7 +1,7 @@
 package io.voxkit.client
 
+import io.voxkit.engineio.client.engineIO
 import io.voxkit.engineio.client.ioHttpClient
-import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
@@ -19,22 +19,22 @@ class BinaryWSTest {
         val binaryData = ByteArray(5) { it.toByte() }
         val httpClient = ioHttpClient()
 
-        val session = httpClient.engineIOSession {
+        val engine = backgroundScope.engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
-            for (packet in session.incoming) {
+            for (packet in engine.incoming) {
                 if (packet !is Packet.Binary) continue
                 values.send(packet.data)
             }
         }
 
-        session.send(binaryData)
+        engine.send(binaryData)
 
         assertContentEquals(binaryData, values.receive() as ByteArray)
 
-        session.close()
+        engine.close()
     }
 
     @Test
@@ -44,7 +44,7 @@ class BinaryWSTest {
         val utf8String = "cash money €€€"
         val httpClient = ioHttpClient()
 
-        val session = httpClient.engineIOSession {
+        val session = backgroundScope.engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
         }
