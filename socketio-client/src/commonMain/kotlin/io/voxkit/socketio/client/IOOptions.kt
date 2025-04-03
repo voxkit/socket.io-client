@@ -7,7 +7,7 @@ import io.voxkit.socketio.logging.defaultLogger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
-public class IOFactoryOptionsBuilder {
+public class IOOptionsBuilder {
     /**
      * Whether to create a new [Manager] instance.
      *
@@ -61,8 +61,8 @@ public class IOFactoryOptionsBuilder {
 
     public var dispatcher: CoroutineDispatcher = Dispatchers.Main
 
-    internal fun build(): IOFactoryOptions {
-        return IOFactoryOptions(
+    internal fun build(): IOOptions {
+        return IOOptions(
             forceNew = forceNew,
             loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel),
             dispatcher = dispatcher,
@@ -70,7 +70,7 @@ public class IOFactoryOptionsBuilder {
     }
 }
 
-internal data class IOFactoryOptions(
+internal data class IOOptions(
     val forceNew: Boolean,
     val loggerFactory: VoxKitLoggerFactory,
     val dispatcher: CoroutineDispatcher,

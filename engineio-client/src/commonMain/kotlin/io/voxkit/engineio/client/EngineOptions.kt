@@ -10,7 +10,7 @@ import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import io.voxkit.socketio.logging.defaultLogger
 import io.voxkit.yeast.Yeast
 
-public class EngineIOOptionsBuilder {
+public class EngineOptionsBuilder {
     /**
      * The host name of the server.
      * Default is "localhost".
@@ -78,18 +78,18 @@ public class EngineIOOptionsBuilder {
     }
 }
 
-internal fun EngineIOOptionsBuilder(url: String): EngineIOOptionsBuilder {
-    return EngineIOOptionsBuilder(Url(url))
+internal fun EngineOptionsBuilder(url: String): EngineOptionsBuilder {
+    return EngineOptionsBuilder(Url(url))
 }
 
-internal fun EngineIOOptionsBuilder(url: Url): EngineIOOptionsBuilder {
+internal fun EngineOptionsBuilder(url: Url): EngineOptionsBuilder {
     val transportSet = when {
         url.protocol.name.startsWith("http") -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
         url.protocol.name.startsWith("ws") -> setOf(TransportType.WEBSOCKET)
         else -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
     }
 
-    return EngineIOOptionsBuilder().apply {
+    return EngineOptionsBuilder().apply {
         host = url.host
         port = url.port
         path = url.encodedPath

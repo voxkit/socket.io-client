@@ -1,6 +1,6 @@
 package examples
 
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.parser.data
 import kotlinx.coroutines.CoroutineStart
@@ -14,7 +14,7 @@ private const val NUMBER_OF_FIBONACCI = 5
 
 public fun main(): Unit = runBlocking {
     val process = ServerLauncher.startServer("fibonacci", PORT)
-    val httpClient = engineIOHttpClient()
+    val httpClient = ioHttpClient()
     val session = httpClient.engineIOSession {
         port = PORT
     }

@@ -11,13 +11,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-public fun HttpClient.IO(block: IOFactoryOptionsBuilder.() -> Unit = {}): IO {
-    return IO(this, IOFactoryOptionsBuilder().apply(block).build())
+public fun HttpClient.IO(block: IOOptionsBuilder.() -> Unit = {}): IO {
+    return IO(this, IOOptionsBuilder().apply(block).build())
 }
 
 public class IO internal constructor(
     private val httpClient: HttpClient,
-    private val factoryOptions: IOFactoryOptions
+    private val factoryOptions: IOOptions
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + factoryOptions.dispatcher + CoroutineName("socket.io"))
@@ -39,7 +39,7 @@ public class IO internal constructor(
     }
 
     private fun manager(url: Url, options: ManagerOptions): Manager {
-        return ManagerImpl(
+        return VKManager(
             serverUrl = url.withoutNamespace,
             options = options,
             scope = scope,

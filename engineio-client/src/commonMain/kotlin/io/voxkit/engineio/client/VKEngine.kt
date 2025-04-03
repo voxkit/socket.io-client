@@ -2,14 +2,13 @@ package io.voxkit.engineio.client
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.voxkit.engineio.client.EngineIOSession.State
+import io.voxkit.engineio.client.Engine.State
 import io.voxkit.engineio.client.transports.PollingTransport
 import io.voxkit.engineio.client.transports.Transport
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.client.transports.webSocketTransport
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.engineio.parser.data
-import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -32,13 +31,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-internal class EngineIOSessionImpl(
+internal class VKEngine(
     initialTransport: Transport,
     private val options: EngineIOOptions,
     private val handshakePacket: Packet,
     private val httpClient: HttpClient,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("engine.io")),
-) : EngineIOSession, CoroutineScope by scope {
+) : Engine, CoroutineScope by scope {
 
     override val id: String? = (handshakePacket as? Packet.Open)?.sid
     private val _incoming: Channel<Packet>
@@ -158,7 +157,7 @@ internal class EngineIOSessionImpl(
                         onPacket(packet)
                     }
                     .onFailure { e ->
-                        if (this@EngineIOSessionImpl.transport == transport) {
+                        if (this@VKEngine.transport == transport) {
                             onError(EngineIoException("Transport error [${transport.type}]", cause = e))
                         }
                     }

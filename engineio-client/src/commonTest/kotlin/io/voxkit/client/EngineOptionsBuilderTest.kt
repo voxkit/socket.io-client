@@ -1,14 +1,14 @@
 package io.voxkit.client
 
-import io.voxkit.engineio.client.EngineIOOptionsBuilder
+import io.voxkit.engineio.client.EngineOptionsBuilder
 import io.voxkit.engineio.client.transports.TransportType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class EngineIOOptionsBuilderTest {
+class EngineOptionsBuilderTest {
     @Test
     fun testWithHttpUrl() {
-        val builder = EngineIOOptionsBuilder("http://localhost:8080/socket.io/?foo=bar")
+        val builder = EngineOptionsBuilder("http://localhost:8080/socket.io/?foo=bar")
 
         assertEquals(false, builder.secure)
         assertEquals("localhost", builder.host)
@@ -20,7 +20,7 @@ class EngineIOOptionsBuilderTest {
 
     @Test
     fun testWithHttpsUrl() {
-        val builder = EngineIOOptionsBuilder("https://localhost:8080/socket.io/?foo=bar")
+        val builder = EngineOptionsBuilder("https://localhost:8080/socket.io/?foo=bar")
 
         assertEquals(true, builder.secure)
         assertEquals("localhost", builder.host)
@@ -32,7 +32,7 @@ class EngineIOOptionsBuilderTest {
 
     @Test
     fun testWithWSUrl() {
-        val builder = EngineIOOptionsBuilder("ws://localhost:8080/socket.io/?foo=bar")
+        val builder = EngineOptionsBuilder("ws://localhost:8080/socket.io/?foo=bar")
 
         assertEquals(false, builder.secure)
         assertEquals("localhost", builder.host)
@@ -44,7 +44,7 @@ class EngineIOOptionsBuilderTest {
 
     @Test
     fun testWithWssUrl() {
-        val builder = EngineIOOptionsBuilder("wss://localhost:8080/socket.io/?foo=bar")
+        val builder = EngineOptionsBuilder("wss://localhost:8080/socket.io/?foo=bar")
 
         assertEquals(true, builder.secure)
         assertEquals("localhost", builder.host)

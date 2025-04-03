@@ -1,6 +1,6 @@
 package io.voxkit.client
 
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Packet
@@ -8,8 +8,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class EngineIOSessionTest {
-    private val httpClient = engineIOHttpClient()
+class EngineTest {
+    private val httpClient = ioHttpClient()
     private val serverPort = 3000
 
     @Test

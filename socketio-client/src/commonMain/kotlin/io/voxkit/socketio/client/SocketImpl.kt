@@ -32,7 +32,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 internal class SocketImpl(
     private val namespace: String,
-    private val manager: ManagerImpl,
+    private val manager: VKManager,
     private val auth: AuthSocketOption?,
     private val scope: CoroutineScope,
     loggerFactory: VoxKitLoggerFactory,
@@ -166,7 +166,7 @@ internal class SocketImpl(
         val connectResult = try {
             withTimeout(manager.options.timeout) { connectAck.await() }
         } catch (e: TimeoutCancellationException) {
-            val exception = SocketIOConnectException("Connection timed out")
+            val exception = SocketConnectException("Connection timed out")
             _events.emit(Event.ConnectError(exception))
             throw e
         }
@@ -185,13 +185,13 @@ internal class SocketImpl(
             Packet.Type.CONNECT_ERROR -> {
                 val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
                 val error = packetData?.decodeJsonOrNull<ConnectError>()
-                val e = SocketIOConnectException(error?.message ?: "Unknown error")
+                val e = SocketConnectException(error?.message ?: "Unknown error")
                 _events.emit(Event.ConnectError(e))
                 throw e
             }
 
             else -> {
-                val e = SocketIOConnectException("Unexpected packet type: ${connectResult.type}")
+                val e = SocketConnectException("Unexpected packet type: ${connectResult.type}")
                 _events.emit(Event.ConnectError(e))
                 throw e
             }

@@ -147,7 +147,7 @@ public interface Socket {
 /**
  * Connects the socket to the server
  *
- * @throws SocketIOConnectException if the connection fails
+ * @throws SocketConnectException if the connection fails
  */
 public suspend inline fun Socket.connectOrThrow(): Unit = connect().join()
 

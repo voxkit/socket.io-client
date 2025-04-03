@@ -1,6 +1,6 @@
 package io.voxkit.client
 
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
@@ -17,7 +17,7 @@ class BinaryWSTest {
     fun receiveBinaryData() = runTest(timeout = TIMEOUT) {
         val values = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
-        val httpClient = engineIOHttpClient()
+        val httpClient = ioHttpClient()
 
         val session = httpClient.engineIOSession {
             port = PORT
@@ -42,7 +42,7 @@ class BinaryWSTest {
         val channel = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
         val utf8String = "cash money €€€"
-        val httpClient = engineIOHttpClient()
+        val httpClient = ioHttpClient()
 
         val session = httpClient.engineIOSession {
             port = PORT

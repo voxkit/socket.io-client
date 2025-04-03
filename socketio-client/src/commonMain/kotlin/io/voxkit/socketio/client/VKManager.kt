@@ -2,7 +2,7 @@ package io.voxkit.socketio.client
 
 import io.ktor.client.*
 import io.ktor.http.*
-import io.voxkit.engineio.client.EngineIOSession
+import io.voxkit.engineio.client.Engine
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.parser.DefaultParser
@@ -29,7 +29,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.cancellation.CancellationException
 import io.voxkit.engineio.parser.Packet as EngineIOPacket
 
-internal class ManagerImpl(
+internal class VKManager(
     private val serverUrl: Url,
     val options: ManagerOptions,
     private val scope: CoroutineScope,
@@ -53,7 +53,7 @@ internal class ManagerImpl(
     private val parser = DefaultParser()
 
     private var reconnectionAttemptCount = 0
-    private var engineIOSession: EngineIOSession? = null
+    private var engine: Engine? = null
 
     // TODO: atomic
     private val sockets = mutableMapOf<String, SocketImpl>()
@@ -72,8 +72,8 @@ internal class ManagerImpl(
             try {
                 awaitCancellation()
             } finally {
-                engineIOSession?.close()
-                engineIOSession = null
+                engine?.close()
+                engine = null
             }
         }
     }
@@ -112,10 +112,10 @@ internal class ManagerImpl(
     }
 
     private suspend fun connect(recovering: Boolean) {
-        if (engineIOSession?.isActive == true) return
+        if (engine?.isActive == true) return
 
         mutex.withLock {
-            if (engineIOSession?.isActive == true) return
+            if (engine?.isActive == true) return
             _state.value = State.Connecting
             reconnectionAttemptCount = 0
             connectWithRetries()
@@ -140,11 +140,11 @@ internal class ManagerImpl(
     }
 
     private suspend fun disconnect() {
-        if (engineIOSession?.isActive != true) return
+        if (engine?.isActive != true) return
         mutex.withLock {
-            if (engineIOSession?.isActive == true) {
-                engineIOSession?.close()
-                engineIOSession = null
+            if (engine?.isActive == true) {
+                engine?.close()
+                engine = null
             }
         }
     }
@@ -178,7 +178,7 @@ internal class ManagerImpl(
                     }
                 }
 
-            if (!options.reconnection || engineIOSession?.isActive == true) break
+            if (!options.reconnection || engine?.isActive == true) break
 
             reconnectionAttemptCount++
         }
@@ -187,7 +187,7 @@ internal class ManagerImpl(
     }
 
     private suspend fun createEngineIOSession() {
-        engineIOSession = withTimeout(options.timeout) {
+        engine = withTimeout(options.timeout) {
             httpClient.engineIOSession(serverUrl) {
                 path = options.path
                 headers.appendAll(options.headers)
@@ -201,7 +201,7 @@ internal class ManagerImpl(
     }
 
     private fun startEngineIOSessionLifecycle() {
-        val session = checkNotNull(engineIOSession) { "EngineIOSession is not available" }
+        val session = checkNotNull(engine) { "EngineIOSession is not available" }
 
         session.launch(SupervisorJob()) {
             for (engineIoPacket in session.incoming) {
@@ -213,7 +213,7 @@ internal class ManagerImpl(
             try {
                 awaitCancellation()
             } finally {
-                val sessionState = session.state.value as EngineIOSession.State.Closed
+                val sessionState = session.state.value as Engine.State.Closed
                 logger.d { "Engine.IO session closed. Reason: ${sessionState.reason}" }
                 _state.value = State.Disconnected(sessionState.reason, sessionState.cause)
             }
@@ -270,7 +270,7 @@ internal class ManagerImpl(
             else -> Unit // ignore other packet types
         }
 
-        val session = checkNotNull(engineIOSession)
+        val session = checkNotNull(engine)
 
         when (val encoded = parser.encode(packet)) {
             is Parser.Encoded.Binary -> {

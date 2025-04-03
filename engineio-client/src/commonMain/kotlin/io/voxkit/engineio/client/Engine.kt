@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Represents a session for Engine.IO.
  */
-public interface EngineIOSession : CoroutineScope {
+public interface Engine : CoroutineScope {
     /**
      * A session ID.
      */
@@ -68,7 +68,7 @@ public interface EngineIOSession : CoroutineScope {
 }
 
 /**
- * Creates a new [EngineIOSession] using the provided `urlString` and `block` to configure the [EngineIOOptions].
+ * Creates a new [Engine] using the provided `urlString` and `block` to configure the [EngineIOOptions].
  *
  * @param urlString The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
  * will be use websocket transport only.
@@ -76,11 +76,11 @@ public interface EngineIOSession : CoroutineScope {
  */
 public suspend fun HttpClient.engineIOSession(
     urlString: String,
-    block: EngineIOOptionsBuilder.() -> Unit = {}
-): EngineIOSession = engineIOSession(Url(urlString), block)
+    block: EngineOptionsBuilder.() -> Unit = {}
+): Engine = engineIOSession(Url(urlString), block)
 
 /**
- * Creates a new [EngineIOSession] using the provided `url` and `block` to configure the [EngineIOOptions].
+ * Creates a new [Engine] using the provided `url` and `block` to configure the [EngineIOOptions].
  *
  * @param url The URL string to connect to. If the URL starts with "ws://" or "wss://", it will be the session
  * will be use websocket transport only.
@@ -88,27 +88,27 @@ public suspend fun HttpClient.engineIOSession(
  */
 public suspend fun HttpClient.engineIOSession(
     url: Url,
-    block: EngineIOOptionsBuilder.() -> Unit = {}
-): EngineIOSession {
-    val options = EngineIOOptionsBuilder(url).apply(block).build()
+    block: EngineOptionsBuilder.() -> Unit = {}
+): Engine {
+    val options = EngineOptionsBuilder(url).apply(block).build()
     return engineIOSession(options)
 }
 
 /**
- * Creates a new [EngineIOSession] using the provided [block] to configure the [EngineIOOptions].
+ * Creates a new [Engine] using the provided [block] to configure the [EngineIOOptions].
  *
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public suspend fun HttpClient.engineIOSession(block: EngineIOOptionsBuilder.() -> Unit = {}): EngineIOSession {
-    val options = EngineIOOptionsBuilder().apply(block).build()
+public suspend fun HttpClient.engineIOSession(block: EngineOptionsBuilder.() -> Unit = {}): Engine {
+    val options = EngineOptionsBuilder().apply(block).build()
     return engineIOSession(options)
 }
 
-private suspend fun HttpClient.engineIOSession(options: EngineIOOptions): EngineIOSession {
+private suspend fun HttpClient.engineIOSession(options: EngineIOOptions): Engine {
     val transportType = selectTransportType(options)
     val transport = createTransport(transportType, options)
     val handshakePacket = transport.incoming.receive()
-    return EngineIOSessionImpl(transport, options, handshakePacket, httpClient = this)
+    return VKEngine(transport, options, handshakePacket, httpClient = this)
 }
 
 private suspend fun HttpClient.createTransport(

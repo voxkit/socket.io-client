@@ -2,7 +2,7 @@ package io.voxkit.socketio.client
 
 import io.ktor.client.*
 import io.ktor.client.plugins.logging.*
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.socketio.client.util.argsOf
 import io.voxkit.socketio.client.util.bytesOrNull
 import io.voxkit.socketio.client.util.decodeJsonOrNull
@@ -41,7 +41,7 @@ class ConnectionTest {
 
     @BeforeTest
     fun setup() {
-        httpClient = engineIOHttpClient {
+        httpClient = ioHttpClient {
             install(Logging) {
                 level = LogLevel.INFO
             }

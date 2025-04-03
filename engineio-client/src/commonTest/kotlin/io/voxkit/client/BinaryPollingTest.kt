@@ -1,6 +1,6 @@
 package io.voxkit.client
 
-import io.voxkit.engineio.client.engineIOHttpClient
+import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Packet
@@ -18,7 +18,7 @@ class BinaryPollingTest {
     fun receiveBinaryData() = runTest(timeout = TIMEOUT) {
         val values = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
-        val httpClient = engineIOHttpClient()
+        val httpClient = ioHttpClient()
 
         val session = httpClient.engineIOSession {
             port = PORT
@@ -44,7 +44,7 @@ class BinaryPollingTest {
         val channel = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
         val utf8String = "cash money €€€"
-        val httpClient = engineIOHttpClient()
+        val httpClient = ioHttpClient()
 
         val session = httpClient.engineIOSession {
             port = PORT
