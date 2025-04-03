@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
@@ -31,7 +30,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class ConnectionTest {
@@ -70,7 +68,7 @@ class ConnectionTest {
 
         assertTrue(socket.connected, "Socket should be connected to the default namespace")
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -85,8 +83,8 @@ class ConnectionTest {
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
         assertNotEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be different")
 
-        socket1.close()
-        socket2.close()
+        socket1.disconnect()
+        socket2.disconnect()
     }
 
     @Test
@@ -101,8 +99,8 @@ class ConnectionTest {
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
         assertNotEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be different")
 
-        socket1.close()
-        socket2.close()
+        socket1.disconnect()
+        socket2.disconnect()
     }
 
     @Test
@@ -124,7 +122,7 @@ class ConnectionTest {
         assertEquals(5, ackBack.args[0].decodeJsonOrNull<Int>())
         assertEquals(JsonObject(mapOf("test" to JsonPrimitive(true))), ackBack.args[1].jsonElement)
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -139,7 +137,7 @@ class ConnectionTest {
         assertNotNull(dateString, "Date string should not be null")
         assertNotNull(date, "Date string should be a valid date")
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -161,7 +159,7 @@ class ConnectionTest {
         assertIs<Socket.Event.Custom>(binaryAckBack)
         assertContentEquals(buf, binaryAckBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -174,7 +172,7 @@ class ConnectionTest {
 
         assertContentEquals(buf, binaryAck[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -188,7 +186,7 @@ class ConnectionTest {
         val echoBack = echoBackDeferred.await()
         assertEquals(false, echoBack.args[0].decodeJsonOrNull<Boolean>())
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -212,7 +210,7 @@ class ConnectionTest {
         val echoBacks = echoBackDeferred.await()
         assertEquals(expected, echoBacks.map { it.args[0].decodeJsonOrNull<String>() })
 
-        socket.close()
+        socket.disconnect()
     }
 
     @Test
@@ -223,8 +221,8 @@ class ConnectionTest {
             socket.on<Socket.Event.Connect>().first()
             val foo = socket("/foo")
             connectSocket(foo)
-            foo.close()
-            socket.close()
+            foo.disconnect()
+            socket.disconnect()
         }
 
         launch { connectSocket(socket) }

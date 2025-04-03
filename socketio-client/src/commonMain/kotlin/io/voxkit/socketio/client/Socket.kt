@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonObject
  * A Socket is the fundamental class for interacting with the server.
  * A Socket belongs to a certain Namespace (by default /) and uses an underlying [Manager] to communicate.
  */
-public interface Socket : AutoCloseable {
+public interface Socket {
     /**
      * Whether the socket will automatically try to reconnect.
      */

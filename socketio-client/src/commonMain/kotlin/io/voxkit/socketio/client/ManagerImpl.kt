@@ -56,7 +56,7 @@ internal class ManagerImpl(
     private var engineIOSession: EngineIOSession? = null
 
     // TODO: atomic
-    private val sockets = mutableMapOf<String, Socket>()
+    private val sockets = mutableMapOf<String, SocketImpl>()
     private val connectedSockets = MutableStateFlow<Set<String>>(emptySet())
     private val hasConnectedSockets get() = connectedSockets.value.isNotEmpty()
 
@@ -72,7 +72,6 @@ internal class ManagerImpl(
             try {
                 awaitCancellation()
             } finally {
-                sockets.values.forEach { it.close() }
                 engineIOSession?.close()
                 engineIOSession = null
             }

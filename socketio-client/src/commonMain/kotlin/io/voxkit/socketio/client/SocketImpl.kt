@@ -12,12 +12,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
@@ -58,11 +60,19 @@ internal class SocketImpl(
     // TODO: atomic
     private var ackId = 0L
     private val incoming = manager.incoming.filter { it.namespace == namespace }
-    private val outgoing = Channel<Packet>(capacity = Channel.UNLIMITED)
+    private val outgoing = MutableStateFlow<Channel<Packet>?>(null)
 
     init {
         startConnectionLoop()
         startSendingPackets()
+
+        scope.launch {
+            try {
+                awaitCancellation()
+            } finally {
+                outgoing.value?.cancel()
+            }
+        }
     }
 
     private fun startConnectionLoop() {
@@ -99,10 +109,14 @@ internal class SocketImpl(
         }
 
         scope.launch {
-            while (true) {
-                for (packet in outgoing) {
-                    sendPacketToManager(packet)
+            outgoing.filterNotNull().collect { ch ->
+                logger.d { "new outgoing packets channel created." }
+                runCatching {
+                    for (packet in ch) {
+                        sendPacketToManager(packet)
+                    }
                 }
+                logger.d { "Outgoing packets channel closed." }
             }
         }
     }
@@ -121,7 +135,7 @@ internal class SocketImpl(
                     val hasBinaryData = args.any { it is Packet.Data.Binary }
                     val ackType = if (hasBinaryData) Packet.Type.BINARY_ACK else Packet.Type.ACK
                     val ackPacket = Packet(ackType, namespace, args.toList(), ackId)
-                    outgoing.send(ackPacket)
+                    outgoing.value?.send(ackPacket)
                 }
             }
 
@@ -160,6 +174,7 @@ internal class SocketImpl(
                 val packetData = connectResult.data?.firstOrNull() as? Packet.Data.Json
                 val success = packetData?.element?.let { DefaultParser.JSON.decodeFromJsonElement<ConnectSuccess>(it) }
                 id = success?.sid
+                outgoing.value = Channel(capacity = Channel.UNLIMITED)
                 active = true
                 _connected.value = true
                 _events.emit(Event.Connect)
@@ -186,7 +201,8 @@ internal class SocketImpl(
         _connected.value = false
         active = false
         _events.emit(Event.Disconnect("io client disconnect", null))
-        outgoing.send(Packet(Packet.Type.DISCONNECT, namespace))
+        outgoing.value?.send(Packet(Packet.Type.DISCONNECT, namespace))
+        outgoing.value?.close()
     }
 
     override suspend fun send(event: String, vararg args: Packet.Data) {
@@ -196,7 +212,7 @@ internal class SocketImpl(
             namespace = namespace,
             data = dataOf(event) + args.toList(),
         )
-        outgoing.send(packet)
+        outgoing.value?.send(packet)
     }
 
     override suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data> {
@@ -217,12 +233,8 @@ internal class SocketImpl(
                 .filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
                 .first { it.ackId == packet.ackId }
         }
-        outgoing.send(packet)
+        outgoing.value?.send(packet)
         ackPacket.await()
-    }
-
-    override fun close() {
-        outgoing.cancel()
     }
 }
 
