@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client
 
+import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
 
@@ -65,8 +66,9 @@ public interface Manager {
     }
 
     public sealed interface State {
+        public data object New : State
         public data object Connecting : State
         public data object Connected : State
-        public data class Disconnected(val reason: String, val cause: Throwable?) : State
+        public data class Disconnected(val reason: DisconnectReason, val cause: Throwable?) : State
     }
 }

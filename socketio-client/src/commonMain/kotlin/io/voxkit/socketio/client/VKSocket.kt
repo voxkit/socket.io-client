@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client
 
+import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.Manager.State
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.Packet
@@ -30,7 +31,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
-internal class SocketImpl(
+internal class VKSocket(
     private val namespace: String,
     private val manager: VKManager,
     private val auth: AuthSocketOption?,
@@ -203,7 +204,7 @@ internal class SocketImpl(
         _connected.value = false
         active = false
         return scope.launch {
-            _events.emit(Event.Disconnect("io client disconnect", null))
+            _events.emit(Event.Disconnect(DisconnectReason.CLIENT_REQUEST, null))
             outgoingChannel.value?.send(Packet(Packet.Type.DISCONNECT, namespace))
             outgoingChannel.value?.close()
         }

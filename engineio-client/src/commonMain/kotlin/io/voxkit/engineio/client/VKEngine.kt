@@ -65,7 +65,7 @@ internal class VKEngine(
             _incoming = Channel()
             startSession(initialTransport)
         } else {
-            throw EngineIOInvalidHandshakeException(handshakePacket)
+            throw InvalidHandshakeEngineException(handshakePacket)
         }
 
         scope.launch {
@@ -158,7 +158,7 @@ internal class VKEngine(
                     }
                     .onFailure { e ->
                         if (this@VKEngine.transport == transport) {
-                            onError(EngineIoException("Transport error [${transport.type}]", cause = e))
+                            onError(EngineException("Transport error [${transport.type}]", cause = e))
                         }
                     }
             }
@@ -174,9 +174,9 @@ internal class VKEngine(
                 _incoming.send(packet)
             }
 
-            is Packet.Error -> onError(EngineIoException("Server error", code = packet.data))
+            is Packet.Error -> onError(EngineException("Server error", code = packet.data))
             is Packet.Message, is Packet.Binary -> _incoming.send(packet)
-            is Packet.Close -> onClose("io server disconnect")
+            is Packet.Close -> onClose(DisconnectReason.SERVER_REQUEST)
             else -> logger.w { "Unexpected packet type: $packet" }
         }
     }
@@ -190,7 +190,6 @@ internal class VKEngine(
     }
 
     private suspend fun sendPacket(packet: Packet) {
-
         when (_state.value) {
             State.Opening, State.Upgrading -> {
                 logger.d { "client ==> server: Engine.IO is not ready, waiting for OPEN state" }
@@ -199,19 +198,19 @@ internal class VKEngine(
             }
 
             State.Open -> Unit // Socket is already open
-            is State.Closing, is State.Closed -> throw EngineIOSocketClosedException()
+            is State.Closing, is State.Closed -> throw ClosedEngineException()
         }
         runCatching {
             val currentTransport = transport.value
             logger.d { "client ==> server [${currentTransport.type}]: $packet" }
             currentTransport.send(packet)
         }
-            .onFailure { onError(EngineIoException("Transport error", cause = it)) }
+            .onFailure { onError(EngineException("Transport error", cause = it)) }
             .getOrThrow()
     }
 
     override fun close() {
-        onClose("io client disconnect")
+        onClose(DisconnectReason.CLIENT_REQUEST)
     }
 
     private fun onHeartbeat() {
@@ -220,15 +219,15 @@ internal class VKEngine(
             check(handshakePacket is Packet.Open) { "Handshake packet is not OPEN" }
             val timeout = handshakePacket.pingInterval + handshakePacket.pingTimeout
             delay(timeout)
-            onClose("ping timeout")
+            onClose(DisconnectReason.PING_TIMEOUT)
         }
     }
 
     private fun onError(exception: Exception) {
-        onClose("transport error", exception)
+        onClose(DisconnectReason.TRANSPORT_ERROR, exception)
     }
 
-    private fun onClose(reason: String, cause: Exception? = null) {
+    private fun onClose(reason: DisconnectReason, cause: Exception? = null) {
         if (state.value is State.Closing || state.value is State.Closed) return
         _state.value = State.Closing(reason, cause)
 
@@ -238,10 +237,10 @@ internal class VKEngine(
         _incoming.cancel()
 
         scope.launch {
-            if (reason == "io client disconnect") runCatching { sendPacket(Packet.Close) }
+            if (reason == DisconnectReason.CLIENT_REQUEST) runCatching { sendPacket(Packet.Close) }
             _state.value = State.Closed(reason, cause)
             transport.value.close()
-            scope.cancel(reason, cause)
+            cause?.let { scope.cancel("Transport error", cause) } ?: scope.cancel()
         }
     }
 }

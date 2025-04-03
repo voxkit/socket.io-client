@@ -1,5 +1,6 @@
 package io.voxkit.socketio.client
 
+import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -126,8 +127,11 @@ public interface Socket {
          *   |                       | server was killed during a HTTP long-polling cycle)       |               |
          *```
          */
-        public data class Disconnect(val reason: String, val cause: Throwable?) : Event
+        public data class Disconnect(val reason: DisconnectReason, val cause: Throwable?) : Event
 
+        /**
+         * Custom Socket.IO event.
+         */
         public data class Custom(val event: String, val args: List<Packet.Data>, val ack: Ack?) : Event
     }
 
@@ -149,7 +153,7 @@ public interface Socket {
  *
  * @throws SocketConnectException if the connection fails
  */
-public suspend inline fun Socket.connectOrThrow(): Unit = connect().join()
+public suspend fun Socket.connectOrThrow(): Unit = connect().join()
 
 /**
  * Creates a flow of events filtered by the specified type `T` extending [Socket.Event].
@@ -166,10 +170,9 @@ public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filte
  * @param event The name of the event to filter on
  * @return A [Flow] of [Socket.Event.Custom] with the matching event name
  */
-public inline fun Socket.on(event: String): Flow<Socket.Event.Custom> =
-    on<Socket.Event.Custom>().filter { it.event == event }
+public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }
 
 
 public suspend inline fun <reified T : Socket.Event> Socket.once(): T = on<T>().first()
 
-public suspend inline fun Socket.once(event: String): Socket.Event.Custom = on(event).first()
+public suspend fun Socket.once(event: String): Socket.Event.Custom = on(event).first()

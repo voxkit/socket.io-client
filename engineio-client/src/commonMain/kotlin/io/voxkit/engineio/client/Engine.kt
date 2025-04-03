@@ -42,14 +42,14 @@ public interface Engine : CoroutineScope {
     /**
      * Sends a text packet to the Engine.IO server.
      *
-     * @throws [EngineIOSocketClosedException] if the session is closed.
+     * @throws [ClosedEngineException] if the session is closed.
      */
     public suspend fun send(message: String)
 
     /**
      * Sends a binary packet to the Engine.IO server.
      *
-     * @throws [EngineIOSocketClosedException] if the session is closed.
+     * @throws [ClosedEngineException] if the session is closed.
      */
     public suspend fun send(data: ByteArray)
 
@@ -62,8 +62,8 @@ public interface Engine : CoroutineScope {
         public data object Opening : State
         public data object Open : State
         public data object Upgrading : State
-        public data class Closing(val reason: String, val cause: Throwable?) : State
-        public data class Closed(val reason: String, val cause: Throwable?) : State
+        public data class Closing(val reason: DisconnectReason, val cause: Throwable?) : State
+        public data class Closed(val reason: DisconnectReason, val cause: Throwable?) : State
     }
 }
 

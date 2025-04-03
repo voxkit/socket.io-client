@@ -12,11 +12,14 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -29,6 +32,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class ConnectionTest {
@@ -246,6 +250,21 @@ class ConnectionTest {
         }
 
         job.join()
+    }
+
+    @Test
+    fun testReconnectByDefault() = runTest(timeout = timeout) {
+        val socket = socket()
+
+        val reconnectedDeferred = async(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.Reconnect>().first()
+        }
+
+        socket.connectOrThrow()
+        withContext(Dispatchers.Default) { delay(500.milliseconds) }
+
+        (socket.io as VKManager).engine?.close()
+        reconnectedDeferred.await()
     }
 
     private suspend fun socket(namespace: String = "/", queryString: String = ""): Socket {

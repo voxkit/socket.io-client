@@ -2,6 +2,7 @@ package io.voxkit.socketio.client
 
 import io.ktor.client.*
 import io.ktor.http.*
+import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.engineio.client.Engine
 import io.voxkit.engineio.client.engineIOSession
 import io.voxkit.socketio.client.Manager.State
@@ -43,7 +44,7 @@ internal class VKManager(
     private val _incoming = MutableSharedFlow<Packet>()
     val incoming: Flow<Packet> = _incoming.asSharedFlow()
 
-    private val _state = MutableStateFlow<State>(State.Disconnected("not connected", null))
+    private val _state = MutableStateFlow<State>(State.New)
     val state: StateFlow<State> = _state.asStateFlow()
 
     var recovered: Boolean = false
@@ -51,15 +52,16 @@ internal class VKManager(
 
     private val logger = loggerFactory.createLogger("socket.io manager [${hashCode()}]")
     private val parser = DefaultParser()
-
     private var reconnectionAttemptCount = 0
-    private var engine: Engine? = null
+
+    // Visible for testing
+    var engine: Engine? = null
+        private set
 
     // TODO: atomic
-    private val sockets = mutableMapOf<String, SocketImpl>()
+    private val sockets = mutableMapOf<String, VKSocket>()
     private val connectedSockets = MutableStateFlow<Set<String>>(emptySet())
     private val hasConnectedSockets get() = connectedSockets.value.isNotEmpty()
-
     private val mutex = Mutex()
 
     init {
@@ -82,12 +84,7 @@ internal class VKManager(
         scope.launch {
             state.first { it is State.Connected }
             while (true) {
-                val disconnected = state.first { it is State.Disconnected } as State.Disconnected
-                if (
-                    options.reconnection &&
-                    hasConnectedSockets &&
-                    disconnected.reason in listOf("ping timeout", "transport close", "transport error")
-                ) {
+                if (options.reconnection && hasConnectedSockets) {
                     runCatching { connect(recovering = true) }
                 }
                 state.first { it is State.Connected }
@@ -117,7 +114,6 @@ internal class VKManager(
         mutex.withLock {
             if (engine?.isActive == true) return
             _state.value = State.Connecting
-            reconnectionAttemptCount = 0
             connectWithRetries()
                 .onSuccess {
                     logger.d { "Connection succeed. Reconnect attempts: $reconnectionAttemptCount" }
@@ -132,7 +128,7 @@ internal class VKManager(
                     logger.w(e) { "Connection failed. Reconnect attempts: $reconnectionAttemptCount" }
                     recovered = false
                     _events.emit(Manager.Event.ReconnectionFailed)
-                    _state.value = State.Disconnected("connection failed", e)
+                    _state.value = State.Disconnected(DisconnectReason.TRANSPORT_ERROR, e)
                 }
                 .getOrThrow()
             startEngineIOSessionLifecycle()
@@ -214,7 +210,7 @@ internal class VKManager(
                 awaitCancellation()
             } finally {
                 val sessionState = session.state.value as Engine.State.Closed
-                logger.d { "Engine.IO session closed. Reason: ${sessionState.reason}" }
+                logger.d { "Engine closed. Reason: ${sessionState.reason}" }
                 _state.value = State.Disconnected(sessionState.reason, sessionState.cause)
             }
         }
@@ -258,7 +254,7 @@ internal class VKManager(
     }
 
     override fun socket(namespace: String, auth: AuthSocketOption?): Socket {
-        return sockets.getOrPut(namespace) { SocketImpl(namespace, this, auth, scope, loggerFactory) }
+        return sockets.getOrPut(namespace) { VKSocket(namespace, this, auth, scope, loggerFactory) }
     }
 
     override suspend fun send(packet: Packet) {
