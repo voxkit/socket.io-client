@@ -7,7 +7,6 @@ import io.voxkit.socketio.client.util.argsOf
 import io.voxkit.socketio.client.util.bytesOrNull
 import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.client.util.jsonElement
-import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +60,8 @@ class ConnectionTest {
         val socket = socket()
 
         assertTrue(socket.connected, "Socket should be connected to the default namespace")
+
+        socket.close()
     }
 
     @Test
@@ -71,6 +72,9 @@ class ConnectionTest {
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
         assertNotEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be different")
+
+        socket1.close()
+        socket2.close()
     }
 
     @Test
@@ -81,6 +85,9 @@ class ConnectionTest {
         assertTrue(socket1.connected, "Socket 1 should be connected to the default namespace")
         assertTrue(socket2.connected, "Socket 2 should be connected to the default namespace")
         assertNotEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be different")
+
+        socket1.close()
+        socket2.close()
     }
 
     @Test
@@ -97,8 +104,10 @@ class ConnectionTest {
         val ackBack = ackBackDeferred.await()
 
         assertIs<Socket.Event.Custom>(ackBack)
-        assertEquals(JsonPrimitive(5), ackBack.args[0].jsonElement)
+        assertEquals(5, ackBack.args[0].decodeJsonOrNull<Int>())
         assertEquals(JsonObject(mapOf("test" to JsonPrimitive(true))), ackBack.args[1].jsonElement)
+
+        socket.close()
     }
 
     @Test
@@ -107,10 +116,12 @@ class ConnectionTest {
 
         val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
 
-        val dateString = ack[0].jsonElement.stringOrNull
+        val dateString = ack[0].decodeJsonOrNull<String>()
         val date = dateString?.runCatching { Instant.parse(this) }?.getOrNull()
         assertNotNull(dateString, "Date string should not be null")
         assertNotNull(date, "Date string should be a valid date")
+
+        socket.close()
     }
 
     @Test
@@ -129,6 +140,8 @@ class ConnectionTest {
 
         assertIs<Socket.Event.Custom>(binaryAckBack)
         assertContentEquals(buf, binaryAckBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+
+        socket.close()
     }
 
     @Test
@@ -139,6 +152,8 @@ class ConnectionTest {
         val binaryAck = socket.sendWithAck("getAckBinary", *argsOf(""))
 
         assertContentEquals(buf, binaryAck[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+
+        socket.close()
     }
 
     @Test
@@ -150,6 +165,8 @@ class ConnectionTest {
 
         val echoBack = echoBackDeferred.await()
         assertEquals(false, echoBack.args[0].decodeJsonOrNull<Boolean>())
+
+        socket.close()
     }
 
     private suspend fun socket(namespace: String = "/"): Socket {
