@@ -14,7 +14,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -41,7 +40,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import io.voxkit.engineio.parser.Packet as EnginePacket
 
@@ -206,11 +204,8 @@ internal class VKManager(
             val engine = createEngineIO()
 
             val engineState = runCatching {
-                // for realtime timeout in test environment
-                withContext(Dispatchers.Default) {
-                    withTimeoutOrNull(options.timeout) {
-                        engine.state.first { it == Engine.State.Open || it is Engine.State.Closed }
-                    }
+                withTimeoutOrNull(options.timeout) {
+                    engine.state.first { it == Engine.State.Open || it is Engine.State.Closed }
                 }
             }
                 .onFailure { e ->
@@ -239,9 +234,7 @@ internal class VKManager(
             if (options.reconnection) {
                 val duration = options.calculateReconnectionDelay(reconnectionAttemptCount)
                 logger.d { "Try to reconnect in $duration" }
-                withContext(Dispatchers.Default) {
-                    delay(duration.coerceAtMost(options.reconnectionDelayMax))
-                }
+                delay(duration.coerceAtMost(options.reconnectionDelayMax))
             } else {
                 break
             }
