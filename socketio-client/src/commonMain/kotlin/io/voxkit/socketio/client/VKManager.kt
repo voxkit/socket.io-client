@@ -324,8 +324,14 @@ internal class VKManager(
 
     override fun socket(namespace: String, auth: AuthSocketOption?): Socket {
         return sockets.getOrPut(namespace) {
-            val socket = VKSocket(namespace, this, auth, scope, loggerFactory)
-            socket
+            VKSocket(
+                options = options.socketOption,
+                namespace = namespace,
+                manager = this,
+                auth = auth,
+                scope = scope,
+                loggerFactory = loggerFactory
+            )
         }
     }
 

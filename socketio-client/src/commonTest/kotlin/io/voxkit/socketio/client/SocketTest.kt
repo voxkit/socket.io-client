@@ -135,7 +135,10 @@ class SocketTest {
 
         socket.connect()
 
-        val ack = socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
+        // use Dispatchers.Default for realtime timeout
+        val ack = withContext(Dispatchers.Default) {
+            socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
+        }
 
         val dateString = ack[0].decodeJsonOrNull<String>()
         val date = dateString?.runCatching { Instant.parse(this) }?.getOrNull()
@@ -181,7 +184,10 @@ class SocketTest {
         val socket = io.socket()
         socket.connect()
 
-        val binaryAck = socket.sendWithAck("getAckBinary", *argsOf(""))
+        // use Dispatchers.Default for realtime timeout
+        val binaryAck = withContext(Dispatchers.Default) {
+            socket.sendWithAck("getAckBinary", *argsOf(""))
+        }
 
         assertContentEquals(buf, binaryAck[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
 

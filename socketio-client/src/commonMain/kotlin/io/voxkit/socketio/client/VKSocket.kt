@@ -32,10 +32,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlin.coroutines.coroutineContext
 
 internal class VKSocket(
+    private val options: SocketOptions,
     private val namespace: String,
     private val manager: VKManager,
     private val auth: AuthSocketOption?,
@@ -137,15 +139,23 @@ internal class VKSocket(
 
     private suspend fun sendPacketToManager(packet: Packet) {
         var sent = false
+        var attempt = 0
         while (sent.not()) {
             logger.d { "Send packet: $packet" }
             sent = runCatching {
                 manager.send(packet)
                 true
-            }.onFailure { e ->
+            }.recoverCatching { e ->
                 if (e is CancellationException && coroutineContext.isActive.not()) throw e
-                logger.d(e) { "Sending packet failed. Will try to send it again." }
-            }.getOrElse { false }
+                if (attempt++ == options.retries) {
+                    logger.w { "Sending packet failed. Max retries reached. Discarding packet." }
+                    true
+                } else {
+                    logger.d(e) { "Sending packet failed. Will try to send it again." }
+                    false
+                }
+
+            }.getOrThrow()
         }
     }
 
@@ -211,7 +221,7 @@ internal class VKSocket(
 
     suspend fun sendConnectPacket() {
         runCatching {
-            val data = auth?.let { dataOf(mapOf(it.paramName to it.token)) }
+            val data = (auth ?: options.auth)?.let { dataOf(mapOf(it.paramName to it.token)) }
             manager.send(Packet(Packet.Type.CONNECT, namespace, data))
         }
     }
@@ -257,7 +267,7 @@ internal class VKSocket(
                 .first { it.ackId == packet.ackId }
         }
         sendPacket(packet)
-        ackPacket.await()
+        withTimeout(options.ackTimeout) { ackPacket.await() }
     }
 
     private suspend fun sendPacket(packet: Packet) {
