@@ -12,10 +12,9 @@ import io.voxkit.engineio.parser.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.delay
@@ -29,13 +28,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 internal class VKEngine(
     private val initialTransport: Transport,
-    private val scope: CoroutineScope,
     private val options: EngineIOOptions,
     private val httpClient: HttpClient,
+    private val scope: CoroutineScope,
 ) : Engine {
 
     override val id: String? get() = handshake.value?.sid
@@ -47,7 +45,6 @@ internal class VKEngine(
     private val logger = options.loggerFactory.createLogger("engine.io")
     private var transport = MutableStateFlow(initialTransport)
     private val handshake = MutableStateFlow<Packet.Open?>(null)
-    private var engineJob = SupervisorJob()
     private var pingTimeoutJob: Job? = null
 
     override val transportType: StateFlow<TransportType> = transport
@@ -67,8 +64,13 @@ internal class VKEngine(
     private fun handshake() {
         logger.i { "Handshake started" }
 
-        scope.launch(engineJob) {
-            val handshakePacket = initialTransport.incoming.receive()
+        scope.launch {
+            val handshakePacket = runCatching { initialTransport.incoming.receive() }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    onError(e)
+                }
+                .getOrElse { return@launch }
 
             if (handshakePacket !is Packet.Open) {
                 onError(InvalidHandshakeEngineException(handshakePacket))
@@ -165,7 +167,7 @@ internal class VKEngine(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun produceIncomingPackets(): ReceiveChannel<Packet> {
-        return scope.produce(engineJob + CoroutineName("incoming [engine.io]")) {
+        return scope.produce(CoroutineName("incoming [engine.io]")) {
             handshake.filterNotNull().first()
 
             transport.collectLatest { currentTransport ->
@@ -216,14 +218,12 @@ internal class VKEngine(
         logger.d { "Heartbeat." }
         val handshake = handshake.value ?: return
         pingTimeoutJob?.cancel()
-        pingTimeoutJob = scope.launch(engineJob) {
+        pingTimeoutJob = scope.launch {
             // for realtime delay in test scope
-            withContext(Dispatchers.Default) {
-                val timeout = handshake.pingInterval + handshake.pingTimeout
-                delay(timeout)
-                logger.d { "Ping timeout." }
-                onClose(DisconnectReason.PING_TIMEOUT)
-            }
+            val timeout = handshake.pingInterval + handshake.pingTimeout
+            delay(timeout)
+            logger.d { "Ping timeout." }
+            onClose(DisconnectReason.PING_TIMEOUT)
         }
     }
 
@@ -239,6 +239,6 @@ internal class VKEngine(
             ?: run { logger.d { "Close Engine.IO socket session: $reason" } }
 
         transport.value.close()
-        engineJob.cancel()
+        scope.cancel()
     }
 }

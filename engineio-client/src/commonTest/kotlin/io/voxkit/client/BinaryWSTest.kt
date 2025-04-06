@@ -5,6 +5,7 @@ import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -13,15 +14,18 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class BinaryWSTest {
+    private val engineDispatcher = Dispatchers.Default.limitedParallelism(1)
+
     @Test
     fun receiveBinaryData() = runTest(timeout = TIMEOUT) {
         val values = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
         val httpClient = ioHttpClient()
 
-        val engine = backgroundScope.engineIO(httpClient) {
+        val engine = engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
+            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in engine.incoming) {
@@ -44,23 +48,24 @@ class BinaryWSTest {
         val utf8String = "cash money €€€"
         val httpClient = ioHttpClient()
 
-        val session = backgroundScope.engineIO(httpClient) {
+        val engine = engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
+            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
-            for (packet in session.incoming) {
+            for (packet in engine.incoming) {
                 if ((packet as? Packet.Message)?.data == "hi") continue
                 channel.send(packet)
             }
         }
 
-        session.send(binaryData)
-        session.send(utf8String)
+        engine.send(binaryData)
+        engine.send(utf8String)
 
         assertEquals(Packet.Binary(binaryData), channel.receive() as Packet.Binary)
         assertEquals(Packet.Message(utf8String), channel.receive() as Packet.Message)
 
-        session.close()
+        engine.close()
     }
 }

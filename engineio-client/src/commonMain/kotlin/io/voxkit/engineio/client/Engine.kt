@@ -7,8 +7,9 @@ import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.client.transports.pollingTransport
 import io.voxkit.engineio.client.transports.webSocketTransport
 import io.voxkit.engineio.parser.Packet
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -91,7 +92,7 @@ public fun CoroutineScope.engineIO(
  * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public fun CoroutineScope.engineIO(
+public fun engineIO(
     url: Url,
     httpClient: HttpClient,
     block: EngineOptionsBuilder.() -> Unit = {}
@@ -106,22 +107,23 @@ public fun CoroutineScope.engineIO(
  * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public fun CoroutineScope.engineIO(httpClient: HttpClient, block: EngineOptionsBuilder.() -> Unit = {}): Engine {
+public fun engineIO(httpClient: HttpClient, block: EngineOptionsBuilder.() -> Unit = {}): Engine {
     val options = EngineOptionsBuilder().apply(block).build()
     return engineIO(httpClient, options)
 }
 
-private fun CoroutineScope.engineIO(httpClient: HttpClient, options: EngineIOOptions): Engine {
+private fun engineIO(httpClient: HttpClient, options: EngineIOOptions): Engine {
     val transportType = if (options.transports.contains(TransportType.POLLING)) {
         TransportType.POLLING
     } else {
         options.transports.first()
     }
+    val scope = CoroutineScope(SupervisorJob() + options.dispatcher + CoroutineName("engine.io"))
     val transport = when (transportType) {
-        TransportType.POLLING -> pollingTransport(httpClient, options)
-        TransportType.WEBSOCKET -> webSocketTransport(httpClient, options)
+        TransportType.POLLING -> scope.pollingTransport(httpClient, options)
+        TransportType.WEBSOCKET -> scope.webSocketTransport(httpClient, options)
     }
-    return VKEngine(initialTransport = transport, scope = this, options = options, httpClient = httpClient)
+    return VKEngine(initialTransport = transport, options = options, httpClient = httpClient, scope = scope)
 }
 
 /**
