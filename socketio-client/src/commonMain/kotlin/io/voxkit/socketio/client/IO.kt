@@ -4,21 +4,38 @@ import io.ktor.client.*
 import io.ktor.http.*
 import io.voxkit.socketio.client.util.namespace
 import io.voxkit.socketio.client.util.withoutNamespace
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-public fun CoroutineScope.IO(httpClient: HttpClient, block: IOOptionsBuilder.() -> Unit = {}): IO {
-    return IO(scope = this, httpClient, IOOptionsBuilder().apply(block).build())
+public fun IO(
+    httpClient: HttpClient,
+    dispatcher: CoroutineDispatcher = Dispatchers.Main,
+    block: IOOptionsBuilder.() -> Unit = {}
+): IO {
+    return IO(
+        httpClient = httpClient,
+        ioOptions = IOOptionsBuilder().apply {
+            engineOptions.dispatcher = dispatcher
+            block()
+        }.build(),
+        dispatcher = dispatcher,
+    )
 }
 
 public class IO internal constructor(
-    private val scope: CoroutineScope,
     private val httpClient: HttpClient,
-    private val ioOptions: IOOptions
+    private val ioOptions: IOOptions,
+    dispatcher: CoroutineDispatcher,
 ) : AutoCloseable {
 
     private val logger = ioOptions.loggerFactory.createLogger("IO")
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher + CoroutineName("IO"))
     private var defaultManager: Manager? = null
     private val managers = mutableSetOf<Manager>()
     private val namespaces = mutableSetOf<String>()
@@ -67,5 +84,6 @@ public class IO internal constructor(
         managers.forEach { it.close() }
         managers.clear()
         namespaces.clear()
+        scope.cancel()
     }
 }

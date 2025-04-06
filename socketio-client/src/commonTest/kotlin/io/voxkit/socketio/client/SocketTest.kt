@@ -7,7 +7,6 @@ import io.voxkit.socketio.client.util.bytesOrNull
 import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.logging.LoggingLevel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -53,7 +52,7 @@ class SocketTest {
 
     @Test
     fun testConnectToDefaultNamespace() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket = io.socket()
 
         socket.connect()
@@ -67,7 +66,7 @@ class SocketTest {
 
     @Test
     fun testTwoSocketsWithSameNamespace() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket1 = io.socket()
         val socket2 = io.socket()
 
@@ -86,7 +85,7 @@ class SocketTest {
 
     @Test
     fun testTwoSocketsWithSameNamespaceAndDifferentQueryStrings() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val socket1 = io.socket(queryString = "param1=value1")
         val socket2 = io.socket(queryString = "param2=value2")
@@ -106,7 +105,7 @@ class SocketTest {
 
     @Test
     fun testSendAck() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket = io.socket()
 
         launch(start = CoroutineStart.UNDISPATCHED) {
@@ -131,7 +130,7 @@ class SocketTest {
 
     @Test
     fun testReceiveDateWithAck() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket = io.socket()
 
         socket.connect()
@@ -150,7 +149,7 @@ class SocketTest {
 
     @Test
     fun testSendBinaryAck() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val buf = "huehue".encodeToByteArray()
         val socket = io.socket()
@@ -176,7 +175,7 @@ class SocketTest {
 
     @Test
     fun testReceiveBinaryAck() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val buf = "huehue".encodeToByteArray()
         val socket = io.socket()
@@ -193,7 +192,7 @@ class SocketTest {
 
     @Test
     fun testWorkingWithFalse() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket = io.socket()
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
 
@@ -210,7 +209,7 @@ class SocketTest {
 
     @Test
     fun testReceiveUtf8MultibyteCharacters() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val expected = listOf(
             "てすと",
@@ -238,7 +237,7 @@ class SocketTest {
 
     @Test
     fun testConnectToNamespaceAfterConnectionEstablished() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val socket = io.socket()
 
@@ -259,10 +258,10 @@ class SocketTest {
 
     @Test
     fun testConnectToNamespaceAfterConnectionGetsClosed() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
         val socket = io.socket()
 
-        val job = launch {
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
             socket.once<Socket.Event.Disconnect>()
             val foo = io.socket("/foo")
             foo.connect()
@@ -281,7 +280,7 @@ class SocketTest {
 
     @Test
     fun testReconnectByDefault() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val socket = io.socket()
 
@@ -300,7 +299,7 @@ class SocketTest {
 
     @Test
     fun testReconnectManually() = runTest(timeout = timeout) {
-        val io = backgroundScope.io(httpClient)
+        val io = io(httpClient)
 
         val socket = io.socket()
 
@@ -326,7 +325,7 @@ class SocketTest {
         return socket("${serverUrl}$namespace?$queryString")
     }
 
-    private fun CoroutineScope.io(httpClient: HttpClient) = IO(httpClient) {
+    private fun io(httpClient: HttpClient) = IO(httpClient, Dispatchers.Default) {
         loggingLevel = LoggingLevel.DEBUG
     }
 }

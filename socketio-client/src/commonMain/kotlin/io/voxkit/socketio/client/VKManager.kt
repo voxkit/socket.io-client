@@ -252,7 +252,7 @@ internal class VKManager(
     }
 
     private fun createEngineIO(): Engine {
-        return scope.engineIO(serverUrl, httpClient) {
+        return engineIO(serverUrl, httpClient) {
             path = options.path
             headers.appendAll(options.headers)
             parameters.appendAll(options.parameters)
@@ -260,6 +260,7 @@ internal class VKManager(
             transports = options.transports
             loggingLevel = options.engineOptions.loggingLevel
             logger = options.engineOptions.logger
+            dispatcher = options.engineOptions.dispatcher
         }
     }
 

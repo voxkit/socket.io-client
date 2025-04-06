@@ -74,7 +74,8 @@ internal class VKSocket(
     private var ackId = 0L
     private val incomingPackets = manager.incoming.filter { it.namespace == namespace }
     private val outgoingPackets = Channel<Packet>(capacity = Channel.UNLIMITED)
-    private val mutex = Mutex()
+    private val connectMutex = Mutex()
+    private val disconnectMutex = Mutex()
     private val state = MutableStateFlow<State>(State.New)
 
     init {
@@ -200,7 +201,7 @@ internal class VKSocket(
     private fun connectAsync() = scope.launch(job) {
         if (state.value == State.Connecting || state.value == State.Connected) return@launch
 
-        mutex.withLock {
+        connectMutex.withLock {
             if (state.value != State.New && state.value !is State.Disconnected) return@launch
             state.value = State.Connecting
             logger.i { "Connect socket to namespace [$namespace]" }
@@ -223,7 +224,7 @@ internal class VKSocket(
     private fun disconnectAsync() = scope.launch(job) {
         if (state.value == State.Disconnecting || state.value is State.Disconnected) return@launch
 
-        mutex.withLock {
+        disconnectMutex.withLock {
             if (state.value != State.Connecting && state.value != State.Connected) return@launch
             state.value = State.Disconnecting
 
