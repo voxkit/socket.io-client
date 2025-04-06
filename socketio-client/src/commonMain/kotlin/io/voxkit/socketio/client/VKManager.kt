@@ -47,6 +47,7 @@ import io.voxkit.engineio.parser.Packet as EnginePacket
 
 internal class VKManager(
     private val serverUrl: Url,
+    private val ioOptions: IOOptions,
     val options: ManagerOptions,
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
@@ -258,9 +259,9 @@ internal class VKManager(
             parameters.appendAll(options.parameters)
             timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
             transports = options.transports
-            loggingLevel = options.engineOptions.loggingLevel
-            logger = options.engineOptions.logger
-            dispatcher = options.engineOptions.dispatcher
+            loggingLevel = ioOptions.engineLoggingLevel
+            logger = ioOptions.logger
+            dispatcher = ioOptions.dispatcher
         }
     }
 

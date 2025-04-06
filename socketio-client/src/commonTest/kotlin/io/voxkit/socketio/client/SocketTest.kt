@@ -325,7 +325,8 @@ class SocketTest {
         return socket("${serverUrl}$namespace?$queryString")
     }
 
-    private fun io(httpClient: HttpClient) = IO(httpClient, Dispatchers.Default) {
+    private fun io(httpClient: HttpClient) = IO(httpClient) {
         loggingLevel = LoggingLevel.DEBUG
+        dispatcher = Dispatchers.Default
     }
 }

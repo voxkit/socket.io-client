@@ -4,10 +4,10 @@ import io.ktor.client.*
 import io.ktor.http.*
 import io.voxkit.socketio.client.util.namespace
 import io.voxkit.socketio.client.util.withoutNamespace
-import kotlinx.coroutines.CoroutineDispatcher
+import io.voxkit.socketio.logging.VoxKitLoggerFactory
+import io.voxkit.socketio.logging.defaultLogger
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
@@ -15,27 +15,22 @@ import kotlinx.coroutines.sync.withLock
 
 public fun IO(
     httpClient: HttpClient,
-    dispatcher: CoroutineDispatcher = Dispatchers.Main,
     block: IOOptionsBuilder.() -> Unit = {}
 ): IO {
     return IO(
         httpClient = httpClient,
-        ioOptions = IOOptionsBuilder().apply {
-            engineOptions.dispatcher = dispatcher
-            block()
-        }.build(),
-        dispatcher = dispatcher,
+        ioOptions = IOOptionsBuilder().apply(block).build(),
     )
 }
 
 public class IO internal constructor(
     private val httpClient: HttpClient,
     private val ioOptions: IOOptions,
-    dispatcher: CoroutineDispatcher,
 ) : AutoCloseable {
 
-    private val logger = ioOptions.loggerFactory.createLogger("IO")
-    private val scope = CoroutineScope(SupervisorJob() + dispatcher + CoroutineName("IO"))
+    private val loggerFactory = VoxKitLoggerFactory(ioOptions.logger ?: defaultLogger(), ioOptions.loggingLevel)
+    private val logger = loggerFactory.createLogger("IO")
+    private val scope = CoroutineScope(SupervisorJob() + ioOptions.dispatcher + CoroutineName("IO"))
     private var defaultManager: Manager? = null
     private val managers = mutableSetOf<Manager>()
     private val namespaces = mutableSetOf<String>()
@@ -43,10 +38,7 @@ public class IO internal constructor(
 
     public suspend fun socket(urlString: String, block: ManagerOptionsBuilder.() -> Unit = {}): Socket {
         val url = Url(urlString)
-        val options = ManagerOptionsBuilder().apply {
-            engineOptions = ioOptions.engineOptions
-            block()
-        }.build()
+        val options = ManagerOptionsBuilder().apply(block).build()
         val manager = if (ioOptions.forceNew) {
             manager(url, options)
         } else {
@@ -60,10 +52,11 @@ public class IO internal constructor(
     private fun manager(url: Url, options: ManagerOptions): Manager {
         return VKManager(
             serverUrl = url.withoutNamespace,
+            ioOptions = ioOptions,
             options = options,
             scope = scope,
             httpClient = httpClient,
-            loggerFactory = ioOptions.loggerFactory,
+            loggerFactory = loggerFactory,
         )
     }
 

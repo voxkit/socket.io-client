@@ -131,7 +131,6 @@ public class ManagerOptionsBuilder {
             timestampRequests = timestampRequests,
             transports = transports,
             socketOption = socketBuilder.build(),
-            engineOptions = engineOptions,
         )
     }
 }
@@ -151,7 +150,6 @@ internal data class ManagerOptions(
     val timestampRequests: Boolean,
     val transports: Set<TransportType>,
     val socketOption: SocketOptions,
-    val engineOptions: EngineOptionsBuilder,
 )
 
 internal fun ManagerOptions.calculateReconnectionDelay(attempt: Int): Duration {

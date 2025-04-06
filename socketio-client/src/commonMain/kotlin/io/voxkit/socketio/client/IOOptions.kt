@@ -1,10 +1,9 @@
 package io.voxkit.socketio.client
 
-import io.voxkit.engineio.client.EngineOptionsBuilder
-import io.voxkit.socketio.logging.LoggingLevel
 import io.voxkit.socketio.logging.Logger
-import io.voxkit.socketio.logging.VoxKitLoggerFactory
-import io.voxkit.socketio.logging.defaultLogger
+import io.voxkit.socketio.logging.LoggingLevel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 public class IOOptionsBuilder {
     /**
@@ -54,23 +53,45 @@ public class IOOptionsBuilder {
      */
     public var forceNew: Boolean = false
 
+    /**
+     * The logging level for the socket.io client.
+     */
     public var loggingLevel: LoggingLevel = LoggingLevel.NONE
 
+    /**
+     * The logging level for the underlying engine.io client.
+     *
+     * This is useful for debugging purposes.
+     */
+    public var engineLoggingLevel: LoggingLevel = LoggingLevel.NONE
+
+    /**
+     * The custom logger to use for logging.
+     */
     public var logger: Logger? = null
 
-    public var engineOptions: EngineOptionsBuilder = EngineOptionsBuilder()
+    /**
+     * The dispatcher to use for coroutines.
+     *
+     * Default: [Dispatchers.Main]
+     */
+    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
 
     internal fun build(): IOOptions {
         return IOOptions(
             forceNew = forceNew,
-            loggerFactory = VoxKitLoggerFactory(logger ?: defaultLogger(), loggingLevel),
-            engineOptions = engineOptions,
+            logger = logger,
+            loggingLevel = loggingLevel,
+            engineLoggingLevel = engineLoggingLevel,
+            dispatcher = dispatcher,
         )
     }
 }
 
 internal data class IOOptions(
     val forceNew: Boolean,
-    val loggerFactory: VoxKitLoggerFactory,
-    val engineOptions: EngineOptionsBuilder,
+    val logger: Logger? = null,
+    val loggingLevel: LoggingLevel,
+    val engineLoggingLevel: LoggingLevel,
+    val dispatcher: CoroutineDispatcher,
 )
