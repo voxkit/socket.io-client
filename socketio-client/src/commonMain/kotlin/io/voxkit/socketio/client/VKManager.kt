@@ -239,22 +239,25 @@ internal class VKManager(
             }
 
             when {
-                options.reconnection.not() -> break
+                options.reconnection.not() -> {
+                    logger.d { "Reconnection disabled. Stop trying to reconnect." }
+                    break
+                }
 
                 connectedSockets.value.isEmpty() -> {
                     logger.d { "No opened sockets. Stop trying to reconnect." }
                     break
                 }
 
-                reconnectionAttemptCount < options.reconnectionAttempts -> {
-                    val reconnectionDelay = options.calculateReconnectionDelay(reconnectionAttemptCount)
-                    logger.d { "Try to reconnect in $reconnectionDelay" }
-                    delay(reconnectionDelay.coerceAtMost(options.reconnectionDelayMax))
+                reconnectionAttemptCount == options.reconnectionAttempts -> {
+                    logger.d { "Max reconnect attempts reached. Stop trying to reconnect." }
+                    break
                 }
 
                 else -> {
-                    logger.d { "Max reconnect attempts reached. Stop trying to reconnect." }
-                    break
+                    val reconnectionDelay = options.calculateReconnectionDelay(reconnectionAttemptCount)
+                    logger.d { "Try to reconnect in $reconnectionDelay" }
+                    delay(reconnectionDelay.coerceAtMost(options.reconnectionDelayMax))
                 }
             }
 

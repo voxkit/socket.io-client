@@ -544,6 +544,52 @@ class SocketTest {
         io.close()
     }
 
+    @Test
+    fun testTryToReconnectTwiceAndFailWithImmediateTimeout() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket(namespace = "/timeout") {
+            timeout = ZERO
+            reconnectionAttempts = 2
+            reconnectionDelay = 10.milliseconds
+        }
+
+        var reconnectAttempts = 0
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                reconnectAttempts++
+            }
+        }
+
+        assertFails { socket.connect() }
+        assertEquals(2, reconnectAttempts)
+
+        job.cancel()
+        io.close()
+    }
+
+    @Test
+    fun testNotTryToReconnectWithIncorrectPortWhenReconnectionDisabled() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("http://localhost:3940/asd") {
+            reconnection = false
+        }
+
+        var reconnectAttempts = 0
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                reconnectAttempts++
+            }
+        }
+
+        assertFails { socket.connect() }
+        assertEquals(0, reconnectAttempts)
+
+        job.cancel()
+        io.close()
+    }
+
     private suspend fun IO.socket(
         namespace: String = "/",
         queryString: String = "",
