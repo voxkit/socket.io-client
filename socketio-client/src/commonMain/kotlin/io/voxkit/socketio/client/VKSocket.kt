@@ -249,7 +249,10 @@ internal class VKSocket(
 
     override suspend fun send(event: String, vararg args: Packet.Data) {
         logger.i { "Send event: $event $args" }
-        val packet = Packet(type = Packet.Type.EVENT, namespace = namespace, data = dataOf(event) + args.toList())
+        val packetType = takeIf { args.any { it is Packet.Data.Binary } }
+            ?.let { Packet.Type.BINARY_EVENT }
+            ?: Packet.Type.EVENT
+        val packet = Packet(type = packetType, namespace = namespace, data = dataOf(event) + args.toList())
         sendPacket(packet)
     }
 

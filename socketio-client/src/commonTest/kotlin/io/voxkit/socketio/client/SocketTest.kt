@@ -590,6 +590,66 @@ class SocketTest {
         io.close()
     }
 
+    @Test
+    fun testSendDateAsString() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+        val socket = io.socket()
+        val date = Clock.System.now()
+
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
+        socket.connect()
+        socket.send("echo", *argsOf(date))
+
+        val echoBack = echoBackDeferred.await()
+        assertEquals(date, echoBack.args[0].decodeJsonOrNull<Instant>())
+
+        socket.disconnect()
+
+        io.close()
+    }
+
+    @Test
+    fun testSendDateInObject() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+        val socket = io.socket()
+        val date = Clock.System.now()
+
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
+        socket.connect()
+        socket.send("echo", *argsOf(mapOf("date" to date)))
+
+        val echoBack = echoBackDeferred.await()
+        val obj = echoBack.args[0].decodeJsonOrNull<JsonObject>()
+        val actualDate = obj?.get("date")
+        assertIs<JsonPrimitive>(actualDate)
+        assertEquals("$date", actualDate.content)
+
+        socket.disconnect()
+
+        io.close()
+    }
+
+    @Test
+    fun testSendAndGetBinaryData() = runTest(timeout = timeout) {
+        val io = io(httpClient) {
+            engineLoggingLevel = LoggingLevel.DEBUG
+        }
+        val socket = io.socket()
+
+        val buf = "asdfasdf".encodeToByteArray()
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
+
+        socket.connect()
+        socket.send("echo", *argsOf(buf))
+
+        val echoBack = echoBackDeferred.await()
+        assertContentEquals(buf, echoBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+
+        socket.disconnect()
+
+        io.close()
+    }
+
     private suspend fun IO.socket(
         namespace: String = "/",
         queryString: String = "",
