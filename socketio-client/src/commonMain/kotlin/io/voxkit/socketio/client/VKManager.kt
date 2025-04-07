@@ -82,7 +82,7 @@ internal class VKManager(
     init {
         launchObservingConnectedSockets()
         if (options.reconnection) launchReconnectionLoop()
-        if (options.autoConnect) scope.launch(job, start = CoroutineStart.UNDISPATCHED) { connect() }
+        if (options.autoConnect) connectAsync(recovering = false)
     }
 
     private fun launchReconnectionLoop() {
@@ -197,7 +197,7 @@ internal class VKManager(
     }
 
     private suspend fun connectWithRetries(): Result<Engine> {
-        var error: Throwable? = null
+        var error: Throwable
 
         while (true) {
             if (reconnectionAttemptCount > 0) {
@@ -214,7 +214,6 @@ internal class VKManager(
                     engine.state.first { it == Engine.State.Open || it is Engine.State.Closed }
                 }
             }.onFailure { e ->
-                error = e
                 engine.close()
                 when (e) {
                     is TimeoutCancellationException -> Unit
@@ -232,9 +231,11 @@ internal class VKManager(
             val message = "Connection attempt failed: ${engineState.reason} ${engineState.cause?.message}"
             engineState.cause?.let { logger.w(it) { message } } ?: logger.w { message }
 
-            _events.emit(Event.Error(error!!))
+            error = engineState.cause ?: IllegalStateException("Engine.io closed with no error")
+
+            _events.emit(Event.Error(error))
             if (reconnectionAttemptCount > 0) {
-                _events.emit(Event.ReconnectError(error!!))
+                _events.emit(Event.ReconnectError(error))
             }
 
             when {
@@ -260,7 +261,7 @@ internal class VKManager(
             reconnectionAttemptCount++
         }
 
-        return Result.failure(error!!)
+        return Result.failure(error)
     }
 
     private fun createEngineIO(): Engine {

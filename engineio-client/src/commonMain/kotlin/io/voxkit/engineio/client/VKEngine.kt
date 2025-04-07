@@ -70,7 +70,7 @@ internal class VKEngine(
                     if (e is CancellationException) throw e
                     onError(e)
                 }
-                .getOrElse { return@launch }
+                .getOrNull() ?: return@launch
 
             if (handshakePacket !is Packet.Open) {
                 onError(InvalidHandshakeEngineException(handshakePacket))

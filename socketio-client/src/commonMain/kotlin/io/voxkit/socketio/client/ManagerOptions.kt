@@ -10,7 +10,8 @@ import kotlin.time.Duration.Companion.seconds
 
 public class ManagerOptionsBuilder {
     /**
-     * Whether to automatically connect upon creation. If set to `false, you need to manually connect.
+     * Whether to automatically connect upon creation of [Manager]. If set to `false, you need to manually connect by
+     * calling `Socket.connect()` or `Socket.io.connect()`.
      *
      * Default: `true`
      */

@@ -389,6 +389,7 @@ class SocketTest {
             reconnectionAttempts = 3
             reconnectionDelay = 100.milliseconds
             randomizationFactor = 0.2
+            autoConnect = false
         }
 
         var reconnects = 0
@@ -517,6 +518,29 @@ class SocketTest {
         assertFalse { socket1.connected }
         assertTrue { socket2.connected }
 
+        io.close()
+    }
+
+    @Test
+    fun testTryToReconnectTwiceAndFailWithIncorrectAddress() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("http://localhost:3940/asd") {
+            reconnectionAttempts = 2
+            reconnectionDelay = 10.milliseconds
+        }
+
+        var reconnectAttempts = 0
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                reconnectAttempts++
+            }
+        }
+
+        assertFails { socket.connect() }
+        assertEquals(2, reconnectAttempts)
+
+        job.cancel()
         io.close()
     }
 
