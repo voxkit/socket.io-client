@@ -1,6 +1,6 @@
 package io.voxkit.socketio.client
 
-import io.voxkit.engineio.client.DisconnectReason
+import io.voxkit.engineio.client.CloseReason
 import io.voxkit.socketio.client.Socket.Ack
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.Packet
@@ -54,8 +54,8 @@ internal class VKSocket(
             if (currentState !is State.Disconnected) return true
 
             return when (currentState.reason) {
-                DisconnectReason.CLIENT_DISCONNECT,
-                DisconnectReason.SERVER_DISCONNECT -> false
+                CloseReason.CLIENT_DISCONNECT,
+                CloseReason.SERVER_DISCONNECT -> false
 
                 else -> true
             }
@@ -121,10 +121,10 @@ internal class VKSocket(
                     state.first { it == State.Connected || it == State.Disconnecting }
                     if (packet.type == Packet.Type.DISCONNECT) {
                         state.value = State.Disconnected(
-                            DisconnectReason.CLIENT_DISCONNECT,
+                            CloseReason.CLIENT_DISCONNECT,
                             CancellationException("Client disconnect")
                         )
-                        _events.emit(Event.Disconnect(DisconnectReason.CLIENT_DISCONNECT, null))
+                        _events.emit(Event.Disconnect(CloseReason.CLIENT_DISCONNECT, null))
                     }
                     sendPacketToManager(packet)
                     if (packet.type == Packet.Type.DISCONNECT) {
@@ -186,7 +186,7 @@ internal class VKSocket(
         val error = packetData?.decodeJsonOrNull<ConnectError>()
         logger.d { "Socket connection to namespace [$namespace] failed: ${error?.message}" }
         val e = SocketConnectException(error?.message ?: "Unknown error")
-        state.value = State.Disconnected(DisconnectReason.SERVER_DISCONNECT, e)
+        state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, e)
         _events.emit(Event.ConnectError(e))
     }
 
@@ -282,12 +282,19 @@ internal class VKSocket(
         }
     }
 
+    suspend fun onManagerConnectError(reason: CloseReason, cause: Throwable) {
+        if (state.value == State.Connecting) {
+            state.value = State.Disconnected(reason, cause)
+            _events.emit(Event.ConnectError(cause))
+        }
+    }
+
     private interface State {
         data object New : State
         data object Connecting : State
         data object Connected : State
         data object Disconnecting : State
-        data class Disconnected(val reason: DisconnectReason, val cause: Throwable) : State
+        data class Disconnected(val reason: CloseReason, val cause: Throwable) : State
     }
 }
 

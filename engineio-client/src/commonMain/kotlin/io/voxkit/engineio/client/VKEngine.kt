@@ -177,7 +177,7 @@ internal class VKEngine(
 
                     when (packet) {
                         Packet.Close -> {
-                            onClose(DisconnectReason.SERVER_DISCONNECT)
+                            onClose(CloseReason.SERVER_DISCONNECT)
                             return@collectLatest
                         }
 
@@ -211,7 +211,7 @@ internal class VKEngine(
     }
 
     override fun close() {
-        onClose(DisconnectReason.CLIENT_DISCONNECT)
+        onClose(CloseReason.CLIENT_DISCONNECT)
     }
 
     private fun onHeartbeat() {
@@ -223,15 +223,15 @@ internal class VKEngine(
             val timeout = handshake.pingInterval + handshake.pingTimeout
             delay(timeout)
             logger.d { "Ping timeout." }
-            onClose(DisconnectReason.PING_TIMEOUT)
+            onClose(CloseReason.PING_TIMEOUT)
         }
     }
 
     private fun onError(exception: Throwable) {
-        onClose(DisconnectReason.TRANSPORT_ERROR, exception)
+        onClose(CloseReason.TRANSPORT_ERROR, exception)
     }
 
-    private fun onClose(reason: DisconnectReason, cause: Throwable? = null) {
+    private fun onClose(reason: CloseReason, cause: Throwable? = null) {
         if (state.value is State.Closed) return
         _state.value = State.Closed(reason, cause)
 

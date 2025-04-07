@@ -9,6 +9,7 @@ import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterIsInstance
@@ -26,10 +27,12 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -327,11 +330,67 @@ class SocketTest {
         io.close()
     }
 
-    private suspend fun IO.socket(namespace: String = "/", queryString: String = ""): Socket {
-        return socket("${serverUrl}$namespace?$queryString")
+    @Test
+    fun testReconnectAutomaticallyAfterReconnectingManually() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket()
+
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.once<Socket.Event.Disconnect>()
+            val job = launch(start = CoroutineStart.UNDISPATCHED) {
+                socket.io.events.filterIsInstance<Manager.Event.Reconnect>().first()
+            }
+
+            socket.connect()
+            withContext(Dispatchers.Default) { delay(500) }
+            (socket.io as VKManager).engine.value?.close()
+            job.join()
+        }
+
+        socket.connect()
+        socket.disconnect()
+
+        job.join()
+
+        io.close()
     }
 
-    private fun io(httpClient: HttpClient) = IO(httpClient) {
+    @Test
+    fun testAttemptReconnectsAfterAFailedReconnect() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("/timeout") {
+            timeout = ZERO
+            reconnectionAttempts = 2
+            reconnectionDelay = 10.milliseconds
+        }
+
+        val reconnectAttempts = mutableListOf<Int>()
+        val job2 = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                reconnectAttempts += it.attempt
+            }
+        }
+
+        val throwable = assertFails { socket.connect() }
+        assertIs<TimeoutCancellationException>(throwable)
+        assertEquals(listOf(1, 2), reconnectAttempts)
+
+        job2.cancel()
+        io.close()
+    }
+
+    private suspend fun IO.socket(
+        namespace: String = "/",
+        queryString: String = "",
+        block: ManagerOptionsBuilder.() -> Unit = {},
+    ): Socket {
+        return socket("${serverUrl}$namespace?$queryString", block)
+    }
+
+    private fun io(httpClient: HttpClient, block: IOOptionsBuilder.() -> Unit = {}) = IO(httpClient) {
+        block()
         loggingLevel = LoggingLevel.DEBUG
         dispatcher = Dispatchers.Default
     }

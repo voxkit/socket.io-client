@@ -1,8 +1,6 @@
 package io.voxkit.socketio.client
 
-import io.voxkit.engineio.client.DisconnectReason
 import io.voxkit.socketio.client.parser.Packet
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 
 /**

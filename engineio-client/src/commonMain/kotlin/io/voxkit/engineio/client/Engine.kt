@@ -66,7 +66,7 @@ public interface Engine {
     public sealed interface State {
         public data object Opening : State
         public data object Open : State
-        public data class Closed(val reason: DisconnectReason, val cause: Throwable?) : State
+        public data class Closed(val reason: CloseReason, val cause: Throwable?) : State
     }
 }
 

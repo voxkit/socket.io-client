@@ -2,7 +2,7 @@ package io.voxkit.socketio.client
 
 import io.ktor.client.*
 import io.ktor.http.*
-import io.voxkit.engineio.client.DisconnectReason
+import io.voxkit.engineio.client.CloseReason
 import io.voxkit.engineio.client.Engine
 import io.voxkit.engineio.client.engineIO
 import io.voxkit.socketio.client.Manager.Event
@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
@@ -40,7 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import io.voxkit.engineio.parser.Packet as EnginePacket
 
 internal class VKManager(
@@ -114,16 +115,20 @@ internal class VKManager(
     }
 
     override suspend fun connect() = coroutineScope {
-        val connected = launch(job) { state.first { it == State.Connected } }
-        val disconnected = async(job) { state.filterIsInstance<State.Disconnected>().first() }
+        val connected = launch(job, start = CoroutineStart.UNDISPATCHED) { state.first { it == State.Connected } }
+        val disconnected = async(job, start = CoroutineStart.UNDISPATCHED) {
+            state.filterIsInstance<State.Disconnected>().first()
+        }
 
         connectAsync(false)
 
-        select {
-            connected.onJoin { }
-            disconnected.onAwait { throw it.cause }
+        val result: Result<Unit> = select {
+            connected.onJoin { Result.success(Unit) }
+            disconnected.onAwait { Result.failure(it.cause) }
         }
         coroutineContext.cancelChildren()
+
+        result.getOrThrow()
     }
 
     private fun connectAsync(recovering: Boolean) = scope.launch(job) {
@@ -168,7 +173,8 @@ internal class VKManager(
                     }
                     recovered = false
                     _events.emit(Event.ReconnectionFailed)
-                    state.value = State.Disconnected(DisconnectReason.TRANSPORT_ERROR, e)
+                    state.value = State.Disconnected(CloseReason.TRANSPORT_ERROR, e)
+                    notifySockets(CloseReason.TRANSPORT_ERROR, e)
                 }
                 .getOrNull()
         }
@@ -180,10 +186,16 @@ internal class VKManager(
             .forEach { (_, socket) -> scope.launch(job) { socket.sendConnectPacket() } }
     }
 
+    private fun notifySockets(reason: CloseReason, cause: Throwable) {
+        sockets
+            .filter { (namespace) -> connectedSockets.value.contains(namespace) }
+            .forEach { (_, socket) -> scope.launch(job) { socket.onManagerConnectError(reason, cause) } }
+    }
+
     private fun disconnect() {
         logger.i { "Disconnect socket.io manager" }
         state.value = State.Disconnected(
-            DisconnectReason.CLIENT_DISCONNECT,
+            CloseReason.CLIENT_DISCONNECT,
             CancellationException("Client disconnect")
         )
         _engine.value?.close()
@@ -193,7 +205,7 @@ internal class VKManager(
     private suspend fun connectWithRetries(): Result<Engine> {
         var error: Throwable? = null
 
-        while (reconnectionAttemptCount <= options.reconnectionAttempts) {
+        while (true) {
             if (reconnectionAttemptCount > 0) {
                 logger.d { "Reconnect. Attempt: $reconnectionAttemptCount" }
                 _events.emit(Event.ReconnectAttempt(reconnectionAttemptCount))
@@ -204,17 +216,20 @@ internal class VKManager(
             val engine = createEngineIO()
 
             val engineState = runCatching {
-                withTimeoutOrNull(options.timeout) {
+                val res = withTimeout(options.timeout) {
                     engine.state.first { it == Engine.State.Open || it is Engine.State.Closed }
                 }
+                res
             }
                 .onFailure { e ->
-                    if (e is CancellationException) {
-                        engine.close()
-                        throw e
+                    error = e
+                    engine.close()
+                    when (e) {
+                        is TimeoutCancellationException -> Unit
+                        is CancellationException -> throw e
                     }
                 }
-                .getOrElse { Engine.State.Closed(DisconnectReason.TRANSPORT_ERROR, it) }
+                .getOrElse { Engine.State.Closed(CloseReason.TRANSPORT_ERROR, it) }
 
             if (engineState == Engine.State.Open) {
                 return Result.success(engine)
@@ -224,18 +239,18 @@ internal class VKManager(
             val message = "Connection attempt failed: ${engineState.reason} ${engineState.cause?.message}"
             engineState.cause?.let { logger.w(it) { message } } ?: logger.w { message }
 
-            val e = SocketConnectException(message).also { error = it }
             if (reconnectionAttemptCount == 0) {
-                _events.emit(Event.Error(e))
+                _events.emit(Event.Error(error!!))
             } else {
-                _events.emit(Event.ReconnectError(e))
+                _events.emit(Event.ReconnectError(error!!))
             }
 
-            if (options.reconnection) {
+            if (options.reconnection && reconnectionAttemptCount < options.reconnectionAttempts) {
                 val duration = options.calculateReconnectionDelay(reconnectionAttemptCount)
                 logger.d { "Try to reconnect in $duration" }
                 delay(duration.coerceAtMost(options.reconnectionDelayMax))
             } else {
+                logger.d { "Max reconnect attempts reached. Stop trying to reconnect." }
                 break
             }
 
@@ -270,7 +285,7 @@ internal class VKManager(
                     is CancellationException -> {
                         if (_engine.value == engine && state.value !is State.Disconnected) {
                             logger.d { "engine.io incoming packets channel closed. Transit Manager to DISCONNECTED state." }
-                            state.value = State.Disconnected(DisconnectReason.TRANSPORT_CLOSE, e)
+                            state.value = State.Disconnected(CloseReason.TRANSPORT_CLOSE, e)
                             engine.close()
                             _engine.value = null
                         } else {
@@ -372,7 +387,7 @@ internal class VKManager(
         logger.d { "Close socket.io manager." }
         sockets.values.forEach { it.close() }
         job.cancel()
-        state.value = State.Disconnected(DisconnectReason.CLIENT_DISCONNECT, CancellationException("Manager closed"))
+        state.value = State.Disconnected(CloseReason.CLIENT_DISCONNECT, CancellationException("Manager closed"))
         _engine.value?.close()
         _engine.value = null
     }
@@ -381,6 +396,6 @@ internal class VKManager(
         data object New : State
         data object Connecting : State
         data object Connected : State
-        data class Disconnected(val reason: DisconnectReason, val cause: Throwable) : State
+        data class Disconnected(val reason: CloseReason, val cause: Throwable) : State
     }
 }

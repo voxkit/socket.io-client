@@ -1,6 +1,6 @@
 package io.voxkit.socketio.client
 
-import io.voxkit.engineio.client.DisconnectReason
+import io.voxkit.engineio.client.CloseReason
 import io.voxkit.socketio.client.parser.Packet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -126,7 +126,7 @@ public interface Socket {
          *   |                       | server was killed during a HTTP long-polling cycle)       |               |
          *```
          */
-        public data class Disconnect(val reason: DisconnectReason, val cause: Throwable?) : Event
+        public data class Disconnect(val reason: CloseReason, val cause: Throwable?) : Event
 
         /**
          * Custom Socket.IO event.
