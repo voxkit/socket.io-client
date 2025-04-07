@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,6 +33,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -376,6 +378,45 @@ class SocketTest {
         val throwable = assertFails { socket.connect() }
         assertIs<TimeoutCancellationException>(throwable)
         assertEquals(listOf(1, 2), reconnectAttempts)
+
+        job2.cancel()
+        io.close()
+    }
+
+    @Test
+    fun testReconnectDelayShouldIncreaseEveryTime() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("/timeout") {
+            timeout = ZERO
+            reconnectionAttempts = 3
+            reconnectionDelay = 100.milliseconds
+            randomizationFactor = 0.2
+        }
+
+        var reconnects = 0
+        var increasingDelay = false
+        var startTime = Instant.DISTANT_PAST
+        var prevDelay = Duration.ZERO
+        val job2 = launch(start = CoroutineStart.UNDISPATCHED) {
+            launch {
+                socket.io.events.filterIsInstance<Manager.Event.Error>().collect {
+                    startTime = Clock.System.now()
+                }
+            }
+            launch {
+                socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                    reconnects++
+                    val curDelay = Clock.System.now() - startTime
+                    increasingDelay = curDelay > prevDelay
+                    prevDelay = curDelay
+                }
+            }
+        }
+
+        assertFails { socket.connect() }
+        assertEquals(3, reconnects)
+        assertTrue { increasingDelay }
 
         job2.cancel()
         io.close()

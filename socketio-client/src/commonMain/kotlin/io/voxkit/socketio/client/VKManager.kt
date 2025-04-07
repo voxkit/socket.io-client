@@ -239,9 +239,8 @@ internal class VKManager(
             val message = "Connection attempt failed: ${engineState.reason} ${engineState.cause?.message}"
             engineState.cause?.let { logger.w(it) { message } } ?: logger.w { message }
 
-            if (reconnectionAttemptCount == 0) {
-                _events.emit(Event.Error(error!!))
-            } else {
+            _events.emit(Event.Error(error!!))
+            if (reconnectionAttemptCount > 0) {
                 _events.emit(Event.ReconnectError(error!!))
             }
 
