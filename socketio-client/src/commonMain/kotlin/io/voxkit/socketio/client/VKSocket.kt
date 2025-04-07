@@ -38,7 +38,7 @@ import kotlin.coroutines.coroutineContext
 
 internal class VKSocket(
     private val options: SocketOptions,
-    private val namespace: String,
+    override val namespace: String,
     private val manager: VKManager,
     private val auth: AuthSocketOption?,
     private val scope: CoroutineScope,
@@ -220,6 +220,8 @@ internal class VKSocket(
     }
 
     suspend fun sendConnectPacket() {
+        manager.onConnectSocket(this)
+
         runCatching {
             val data = (auth ?: options.auth)?.let { dataOf(mapOf(it.paramName to it.token)) }
             manager.send(Packet(Packet.Type.CONNECT, namespace, data))
@@ -227,6 +229,8 @@ internal class VKSocket(
     }
 
     override suspend fun disconnect() {
+        manager.onDisconnectSocket(this)
+
         disconnectAsync()
         state.filterIsInstance<State.Disconnected>().first()
     }

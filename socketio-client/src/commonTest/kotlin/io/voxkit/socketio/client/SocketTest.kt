@@ -242,7 +242,6 @@ class SocketTest {
         assertEquals(expected, echoBacks.map { it.args[0].decodeJsonOrNull<String>() })
 
         socket.disconnect()
-
         io.close()
     }
 
@@ -263,7 +262,6 @@ class SocketTest {
         socket.connect()
 
         job.join()
-
         io.close()
     }
 
@@ -285,7 +283,6 @@ class SocketTest {
         }
 
         job.join()
-
         io.close()
     }
 
@@ -303,8 +300,8 @@ class SocketTest {
         withContext(Dispatchers.Default) { delay(500.milliseconds) }
 
         (socket.io as VKManager).engine.value?.close()
-        job.join()
 
+        job.join()
         io.close()
     }
 
@@ -328,14 +325,12 @@ class SocketTest {
         socket.disconnect()
 
         job.join()
-
         io.close()
     }
 
     @Test
     fun testReconnectAutomaticallyAfterReconnectingManually() = runTest(timeout = timeout) {
         val io = io(httpClient)
-
         val socket = io.socket()
 
         val job = launch(start = CoroutineStart.UNDISPATCHED) {
@@ -354,7 +349,6 @@ class SocketTest {
         socket.disconnect()
 
         job.join()
-
         io.close()
     }
 
@@ -369,7 +363,7 @@ class SocketTest {
         }
 
         val reconnectAttempts = mutableListOf<Int>()
-        val job2 = launch(start = CoroutineStart.UNDISPATCHED) {
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
             socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
                 reconnectAttempts += it.attempt
             }
@@ -379,7 +373,7 @@ class SocketTest {
         assertIs<TimeoutCancellationException>(throwable)
         assertEquals(listOf(1, 2), reconnectAttempts)
 
-        job2.cancel()
+        job.cancel()
         io.close()
     }
 
@@ -398,7 +392,7 @@ class SocketTest {
         var increasingDelay = false
         var startTime = Instant.DISTANT_PAST
         var prevDelay = Duration.ZERO
-        val job2 = launch(start = CoroutineStart.UNDISPATCHED) {
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
             launch {
                 socket.io.events.filterIsInstance<Manager.Event.Error>().collect {
                     startTime = Clock.System.now()
@@ -418,6 +412,37 @@ class SocketTest {
         assertEquals(3, reconnects)
         assertTrue { increasingDelay }
 
+        job.cancel()
+        io.close()
+    }
+
+    @Test
+    fun testNotReconnectWhenForceClosed() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("/invalid") {
+            timeout = ZERO
+            reconnectionDelay = 10.milliseconds
+            autoConnect = false
+        }
+
+        var reconnects = 0
+        val job1 = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.Error>().collect {
+                socket.disconnect()
+            }
+        }
+        val job2 = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().collect {
+                reconnects++
+            }
+        }
+
+        assertFails { socket.connect() }
+        withContext(Dispatchers.Default) { delay(500) }
+        assertEquals(0, reconnects)
+
+        job1.cancel()
         job2.cancel()
         io.close()
     }

@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
@@ -101,15 +100,10 @@ internal class VKManager(
     private fun launchObservingConnectedSockets() {
         scope.launch(job, start = CoroutineStart.UNDISPATCHED) {
             connectedSockets
-                .drop(1) // skip initial value
-                .collect { namespaces ->
-                    if (namespaces.isEmpty()) {
-                        logger.d { "There is no connected sockets anymore. Disconnect manger." }
-                        disconnect()
-                    } else if (state.value !is State.Connected && state.value !is State.Connecting) {
-                        logger.d { "We have at least one connected socket, but engine is not opened. Connect manager." }
-                        connectAsync(recovering = false)
-                    }
+                .filter { it.isNotEmpty() && state.value !is State.Connected && state.value !is State.Connecting }
+                .collect {
+                    logger.d { "We have at least one opened socket, but Manager is not connected. Connect manager." }
+                    connectAsync(recovering = false)
                 }
         }
     }
@@ -216,20 +210,19 @@ internal class VKManager(
             val engine = createEngineIO()
 
             val engineState = runCatching {
-                val res = withTimeout(options.timeout) {
+                withTimeout(options.timeout) {
                     engine.state.first { it == Engine.State.Open || it is Engine.State.Closed }
                 }
-                res
-            }
-                .onFailure { e ->
-                    error = e
-                    engine.close()
-                    when (e) {
-                        is TimeoutCancellationException -> Unit
-                        is CancellationException -> throw e
-                    }
+            }.onFailure { e ->
+                error = e
+                engine.close()
+                when (e) {
+                    is TimeoutCancellationException -> Unit
+                    is CancellationException -> throw e
                 }
-                .getOrElse { Engine.State.Closed(CloseReason.TRANSPORT_ERROR, it) }
+            }.getOrElse { e ->
+                Engine.State.Closed(CloseReason.TRANSPORT_ERROR, e)
+            }
 
             if (engineState == Engine.State.Open) {
                 return Result.success(engine)
@@ -244,13 +237,24 @@ internal class VKManager(
                 _events.emit(Event.ReconnectError(error!!))
             }
 
-            if (options.reconnection && reconnectionAttemptCount < options.reconnectionAttempts) {
-                val duration = options.calculateReconnectionDelay(reconnectionAttemptCount)
-                logger.d { "Try to reconnect in $duration" }
-                delay(duration.coerceAtMost(options.reconnectionDelayMax))
-            } else {
-                logger.d { "Max reconnect attempts reached. Stop trying to reconnect." }
-                break
+            when {
+                options.reconnection.not() -> break
+
+                connectedSockets.value.isEmpty() -> {
+                    logger.d { "No opened sockets. Stop trying to reconnect." }
+                    break
+                }
+
+                reconnectionAttemptCount < options.reconnectionAttempts -> {
+                    val reconnectionDelay = options.calculateReconnectionDelay(reconnectionAttemptCount)
+                    logger.d { "Try to reconnect in $reconnectionDelay" }
+                    delay(reconnectionDelay.coerceAtMost(options.reconnectionDelayMax))
+                }
+
+                else -> {
+                    logger.d { "Max reconnect attempts reached. Stop trying to reconnect." }
+                    break
+                }
             }
 
             reconnectionAttemptCount++
@@ -351,10 +355,6 @@ internal class VKManager(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun send(packet: Packet) {
-        if (packet.type == Packet.Type.CONNECT) {
-            connectedSockets.value += packet.namespace
-        }
-
         // wait for engine.io to be opened
         val engine = _engine
             .filterNotNull()
@@ -376,8 +376,8 @@ internal class VKManager(
 
             logger.d { "client ==> server: $packet" }
         } finally {
-            if (packet.type == Packet.Type.DISCONNECT) {
-                connectedSockets.value -= packet.namespace
+            if (packet.type == Packet.Type.DISCONNECT && connectedSockets.value.isEmpty()) {
+                disconnect()
             }
         }
     }
@@ -389,6 +389,14 @@ internal class VKManager(
         state.value = State.Disconnected(CloseReason.CLIENT_DISCONNECT, CancellationException("Manager closed"))
         _engine.value?.close()
         _engine.value = null
+    }
+
+    fun onConnectSocket(socket: Socket) {
+        connectedSockets.value += socket.namespace
+    }
+
+    fun onDisconnectSocket(socket: Socket) {
+        connectedSockets.value -= socket.namespace
     }
 
     private sealed interface State {

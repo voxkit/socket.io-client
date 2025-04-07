@@ -62,6 +62,11 @@ public interface Socket {
     public val events: Flow<Event>
 
     /**
+     * The namespace of the socket.
+     */
+    public val namespace: String
+
+    /**
      * Manually connects the socket.
      */
     public suspend fun connect()
