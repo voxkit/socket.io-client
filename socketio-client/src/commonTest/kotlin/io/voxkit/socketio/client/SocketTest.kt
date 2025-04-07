@@ -11,12 +11,14 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -29,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -417,7 +420,7 @@ class SocketTest {
     }
 
     @Test
-    fun testNotReconnectWhenForceClosed() = runTest(timeout = timeout) {
+    fun testStopReconnectingWhenForceClosed() = runTest(timeout = timeout) {
         val io = io(httpClient)
 
         val socket = io.socket("/invalid") {
@@ -439,11 +442,81 @@ class SocketTest {
         }
 
         assertFails { socket.connect() }
+        // set a timer to let reconnection possibly fire
         withContext(Dispatchers.Default) { delay(500) }
         assertEquals(0, reconnects)
 
         job1.cancel()
         job2.cancel()
+        io.close()
+    }
+
+    @Test
+    fun testReconnectAfterStoppingReconnection() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket = io.socket("/timeout") {
+            timeout = ZERO
+            reconnectionAttempts = 2
+            reconnectionDelay = 10.milliseconds
+            autoConnect = false
+        }
+
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().first()
+            socket.disconnect()
+            socket.connect()
+            socket.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().first()
+        }
+
+        assertFails { socket.connect() }
+
+        socket.disconnect()
+        job.cancel()
+        io.close()
+    }
+
+    @Test
+    fun testStopReconnectingOnASocketAndKeepToReconnectOnAnother() = runTest(timeout = timeout) {
+        val io = io(httpClient)
+
+        val socket1 = io.socket(namespace = "/")
+        val socket2 = io.socket(namespace = "/asd")
+        assertEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be the same")
+        val manger = (socket1.io as VKManager)
+
+
+        var testPassed: Boolean? = null
+        val job1 = launch(start = CoroutineStart.UNDISPATCHED) {
+            socket1.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().first()
+            socket1.disconnect()
+
+            testPassed = select {
+                launch {
+                    socket1.once<Socket.Event.Connect>()
+                }.onJoin { false }
+
+                launch {
+                    socket2.once<Socket.Event.Connect>()
+                    withContext(Dispatchers.Default) { delay(500) }
+                }.onJoin { true }
+            }.also {
+                coroutineContext.cancelChildren()
+            }
+        }
+
+        runCatching { socket1.connect() }
+        runCatching { socket2.connect() }
+
+        withContext(Dispatchers.Default) { delay(1000) }
+        manger.engine.value?.close()
+
+        job1.join()
+
+        assertEquals(true, testPassed)
+        assertFalse { socket1.connected }
+        assertTrue { socket2.connected }
+
         io.close()
     }
 
