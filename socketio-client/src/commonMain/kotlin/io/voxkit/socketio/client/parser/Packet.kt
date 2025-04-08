@@ -1,6 +1,5 @@
 package io.voxkit.socketio.client.parser
 
-import io.voxkit.socketio.client.util.isAttachmentPlaceholder
 import kotlinx.serialization.json.JsonElement
 
 /**
@@ -18,9 +17,9 @@ public data class Packet(
     val namespace: String = "/",
 
     /**
-     * Packet's data
+     * Packet's payload
      */
-    val data: List<Data>? = null,
+    val payload: Payload? = null,
 
     /**
      * Packet's acknowledgment ID.
@@ -33,29 +32,23 @@ public data class Packet(
         EVENT,
         ACK,
         CONNECT_ERROR,
-        BINARY_EVENT,
-        BINARY_ACK,
     }
 
-    public sealed interface Data {
-        public data class Json(val element: JsonElement) : Data
+    /**
+     * Represents the payload of a packet.
+     */
+    public data class Payload(
+        /**
+         * The packet's data encoded as a list of JSON elements.
+         */
+        val data: List<JsonElement>,
 
-        public data class Binary(val buffer: ByteArray) : Data {
-            override fun equals(other: Any?): Boolean {
-                if (this === other) return true
-                if (other !is Binary) return false
-
-                if (!buffer.contentEquals(other.buffer)) return false
-
-                return true
-            }
-
-            override fun hashCode(): Int {
-                return buffer.contentHashCode()
-            }
-        }
-    }
+        /**
+         * The packet's binary data attachments.
+         */
+        val buffers: MutableList<ByteArray> = mutableListOf()
+    )
 }
 
-internal val Packet.placeholdersCount: Int
-    get() = data?.count { (it as? Packet.Data.Json)?.element?.isAttachmentPlaceholder == true } ?: 0
+internal val Packet.isBinary: Boolean
+    get() = payload?.buffers?.isNotEmpty() == true

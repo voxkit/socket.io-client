@@ -16,16 +16,13 @@ import kotlinx.serialization.json.JsonPrimitive
 @PublishedApi
 internal class DefaultParser : Parser {
     override fun encode(packet: Packet): Parser.Encoded {
-        return when (packet.type) {
-            Packet.Type.BINARY_EVENT, Packet.Type.BINARY_ACK -> encodeAsBinary(packet)
-            else -> Parser.Encoded.Text(encodeAsText(packet))
-        }
+        return if (packet.isBinary) encodeAsBinary(packet) else Parser.Encoded.Text(encodeAsText(packet))
     }
 
     private fun encodeAsBinary(packet: Packet): Parser.Encoded.Binary {
-        checkNotNull(packet.data) { "Packet data cannot be null for binary encoding" }
+        checkNotNull(packet.payload) { "Packet data cannot be null for binary encoding" }
         val text = encodeAsText(packet)
-        val buffers = packet.data.mapNotNull { (it as? Packet.Data.Binary)?.buffer }
+        val buffers = packet.payload.buffers
         check(buffers.isNotEmpty()) { "No binary data found in packet" }
         return Parser.Encoded.Binary(text, listOf(text.toByteArray()) + buffers)
     }
@@ -33,101 +30,112 @@ internal class DefaultParser : Parser {
     /**
      * <packet type>[<# of binary attachments>-][<namespace>,][<acknowledgment id>][JSON-stringified payload without binary]
      */
-    private fun encodeAsText(packet: Packet): String {
-        var placeholderIndex = 0
-        val dataWithPlaceholders = packet.data?.map { el -> toJsonElement({ placeholderIndex++ }, el) }
+    private fun encodeAsText(packet: Packet): String = buildString {
+        // packet type
+        val packetType = when {
+            packet.type == Packet.Type.EVENT && packet.isBinary -> BINARY_EVENT_PACKET_TYPE
+            packet.type == Packet.Type.ACK && packet.isBinary -> BINARY_ACK_PACKET_TYPE
+            else -> packet.type.ordinal
+        }
+        append(packetType)
 
-        return buildString {
-            // packet type
-            append(packet.type.ordinal)
+        // number of binary attachments
+        packet.payload?.buffers?.size?.takeIf { it > 0 }?.let { append("$it-") }
 
-            // number of binary attachments
-            placeholderIndex.takeIf { it > 0 }?.let { append("$it-") }
+        // namespace
+        if (packet.namespace != "/") append("${packet.namespace},")
 
-            // namespace
-            if (packet.namespace != "/") append("${packet.namespace},")
+        // acknowledgment id
+        packet.ackId?.let { append(it) }
 
-            // acknowledgment id
-            packet.ackId?.let { append(it) }
-
-            // JSON-stringified payload without binary
-            dataWithPlaceholders?.let { elements ->
-                if (
-                    elements.size == 1 &&
-                    elements[0] !is JsonPrimitive &&
-                    elements[0].isAttachmentPlaceholder.not()
-                ) {
-                    append(Json.encodeToString(elements[0]))
-                } else {
-                    append(Json.encodeToString(elements))
-                }
+        // JSON-stringified payload without binary
+        packet.payload?.data?.let { elements ->
+            if (
+                elements.size == 1 &&
+                elements[0] !is JsonPrimitive &&
+                elements[0].isAttachmentPlaceholder.not()
+            ) {
+                append(NON_BINARY_JSON.encodeToString(elements[0]))
+            } else {
+                append(NON_BINARY_JSON.encodeToString(elements))
             }
         }
     }
 
-    private fun toJsonElement(placeholderIndex: () -> Int, data: Packet.Data): JsonElement {
-        return when (data) {
-            is Packet.Data.Binary -> {
-                JsonObject(
-                    mapOf(
-                        "_placeholder" to JsonPrimitive(true),
-                        "num" to JsonPrimitive(placeholderIndex())
-                    )
-                )
-            }
-
-            is Packet.Data.Json -> data.element
-        }
-    }
-
-    override fun decode(text: String): Packet = decodeText(text)
+    override fun decode(text: String): Parser.Decoded = decodeText(text)
 
     override fun decodeBinary(bytes: ByteArray, partial: Parser.Decoded): Parser.Decoded {
-        if (partial !is Parser.Decoded.Partial) return partial
-        val placeholdersCount = partial.packet.placeholdersCount
-        require(placeholdersCount > 0) { "No placeholders found in the packet for binary data" }
-        val packet = partial.packet.copy(data = replacePlaceholder(partial.packet.data, bytes))
-        return if (placeholdersCount == 1) Parser.Decoded.Completed(packet) else Parser.Decoded.Partial(packet)
-    }
+        if (partial !is Parser.Decoded.Partial1) return partial
+        val p = partial.copy(buffers = partial.buffers + bytes)
 
-    private fun replacePlaceholder(data: List<Packet.Data>?, bytes: ByteArray): List<Packet.Data>? {
-        data ?: return data
-        val newData = data.toMutableList()
-
-        repeat(newData.size) { i ->
-            val el = newData[i]
-            if (el is Packet.Data.Json && el.element.isAttachmentPlaceholder) {
-                newData[i] = Packet.Data.Binary(bytes)
-                return newData
-            }
+        return if (p.numberOfAttachments == p.buffers.size) {
+            val packet = decodePacketFromJson(
+                payload = p.payload,
+                type = p.type,
+                namespace = p.namespace,
+                ackId = p.ackId,
+                buffers = p.buffers.toMutableList(),
+            )
+            Parser.Decoded.Completed(packet)
+        } else {
+            p
         }
-
-        return newData
     }
 
-    private fun decodeText(text: String): Packet {
+    private fun decodeText(text: String): Parser.Decoded {
         require(text.isNotEmpty()) { "Empty data string" }
 
         val packetType = text[0].digitToIntOrNull()
-        require(packetType != null && packetType in 0..Packet.Type.entries.size) { "Invalid packet type: ${text[0]}" }
+        require(packetType != null && packetType in 0..MAX_PACKET_TYPE_VALUE) { "Invalid packet type: ${text[0]}" }
 
-        val type = Packet.Type.entries[packetType]
         val (_, attachmentsCount, namespace, ackId, payload) = decodeNextToken(PacketParts(text.drop(1)))
-        if (type == Packet.Type.BINARY_EVENT || type == Packet.Type.BINARY_ACK) {
-            require(attachmentsCount != null) { "Missing attachments count for binary packet" }
+        val type = when {
+            packetType < Packet.Type.entries.size -> Packet.Type.entries[packetType]
+            packetType == BINARY_EVENT_PACKET_TYPE && attachmentsCount != null -> Packet.Type.EVENT
+            packetType == BINARY_ACK_PACKET_TYPE && attachmentsCount != null -> Packet.Type.ACK
+            else -> error("Invalid packet type: $packetType")
         }
 
-        val jsonElement = payload?.let { JSON.decodeFromString<JsonElement>(it) }
+        return if (attachmentsCount != null && attachmentsCount > 0) {
+            Parser.Decoded.Partial1(
+                type = type,
+                namespace = namespace ?: "/",
+                payload = payload,
+                ackId = ackId,
+                numberOfAttachments = attachmentsCount,
+                buffers = emptyList()
+            )
+        } else {
+            val packet = decodePacketFromJson(payload, type, namespace, ackId)
+            Parser.Decoded.Completed(packet)
+        }
+    }
+
+    private fun decodePacketFromJson(
+        payload: String?,
+        type: Packet.Type,
+        namespace: String?,
+        ackId: Long?,
+        buffers: MutableList<ByteArray> = mutableListOf()
+    ): Packet {
+        val jsonElement = payload?.let { NON_BINARY_JSON.decodeFromString<JsonElement>(it) }
         require(jsonElement == null || jsonElement is JsonObject || jsonElement is JsonArray) { "Invalid JSON payload: $payload" }
 
         val packetData = when (jsonElement) {
-            is JsonObject -> listOf(Packet.Data.Json(jsonElement))
-            is JsonArray -> jsonElement.map { Packet.Data.Json(it) }
+            is JsonObject -> listOf(jsonElement)
+            is JsonArray -> jsonElement.map { it }
             null -> null
             else -> error("Invalid JSON data type")
         }
 
-        return Packet(type = type, namespace = namespace ?: "/", data = packetData, ackId = ackId)
+        val packet = Packet(
+            type = type,
+            namespace = namespace ?: "/",
+            payload = packetData?.let { Packet.Payload(it, buffers) },
+            ackId = ackId
+        )
+
+        return packet
     }
 
     private fun decodeNextToken(parts: PacketParts, token: Token? = Token.ATTACHMENT_COUNT): PacketParts {
@@ -190,9 +198,9 @@ internal class DefaultParser : Parser {
     }
 
     companion object {
-        val JSON: Json = Json {
-            encodeDefaults = true
-            ignoreUnknownKeys = true
-        }
+        private const val BINARY_EVENT_PACKET_TYPE = 5
+        private const val BINARY_ACK_PACKET_TYPE = 6
+        private const val MAX_PACKET_TYPE_VALUE = 6
+        private val NON_BINARY_JSON: Json = ioJson(buffers = null)
     }
 }

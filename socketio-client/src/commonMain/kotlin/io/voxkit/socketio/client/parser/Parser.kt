@@ -14,7 +14,7 @@ internal interface Parser {
     /**
      * Decodes a Socket.IO packet from a string.
      */
-    fun decode(text: String): Packet
+    fun decode(text: String): Decoded
 
     /**
      * Decodes a Socket.IO packet from a byte array.
@@ -51,6 +51,13 @@ internal interface Parser {
         /**
          * Partial decoded packet, which may contain binary data.
          */
-        data class Partial(val packet: Packet) : Decoded
+        data class Partial1(
+            val type: Packet.Type,
+            val namespace: String,
+            val payload: String?,
+            val ackId: Long?,
+            val numberOfAttachments: Int,
+            val buffers: List<ByteArray>,
+        ): Decoded
     }
 }

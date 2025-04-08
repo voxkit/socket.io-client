@@ -2,10 +2,9 @@ package io.voxkit.socketio.client
 
 import io.ktor.client.*
 import io.voxkit.engineio.client.ioHttpClient
-import io.voxkit.socketio.client.util.argsOf
-import io.voxkit.socketio.client.util.bytesOrNull
+import io.voxkit.socketio.client.parser.Binary
+import io.voxkit.socketio.client.parser.encodeToBinary
 import io.voxkit.socketio.client.util.decodeJsonOrNull
-import io.voxkit.socketio.client.util.jsonElement
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -23,12 +22,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFalse
@@ -37,7 +37,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -118,7 +117,7 @@ class SocketTest {
 
         launch(start = CoroutineStart.UNDISPATCHED) {
             val ev = socket.on("ack").first()
-            ev.ack?.invoke(*argsOf(5, mapOf("test" to true)))
+            ev.ack?.invoke(5, mapOf("test" to true))
         }
         val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("ackBack") }
 
@@ -128,8 +127,8 @@ class SocketTest {
         val ackBack = ackBackDeferred.await()
 
         assertIs<Socket.Event.Custom>(ackBack)
-        assertEquals(5, ackBack.args[0].decodeJsonOrNull<Int>())
-        assertEquals(JsonObject(mapOf("test" to JsonPrimitive(true))), ackBack.args[1].jsonElement)
+        assertEquals(5, ackBack.payload.decodeJsonOrNull<Int>(0))
+        assertEquals(mapOf("test" to true), ackBack.payload.decodeJsonOrNull<Map<String, Boolean>>(1))
 
         socket.disconnect()
 
@@ -145,10 +144,10 @@ class SocketTest {
 
         // use Dispatchers.Default for realtime timeout
         val ack = withContext(Dispatchers.Default) {
-            socket.sendWithAck("getAckDate", *argsOf(mapOf("test" to true)))
+            socket.sendWithAck("getAckDate", mapOf("test" to true))
         }
 
-        val dateString = ack[0].decodeJsonOrNull<String>()
+        val dateString = ack.decodeJsonOrNull<String>(0)
         val date = dateString?.runCatching { Instant.parse(this) }?.getOrNull()
         assertNotNull(dateString, "Date string should not be null")
         assertNotNull(date, "Date string should be a valid date")
@@ -162,12 +161,12 @@ class SocketTest {
     fun testSendBinaryAck() = runTest(timeout = timeout) {
         val io = io(httpClient)
 
-        val buf = "huehue".encodeToByteArray()
+        val buf = "huehue".encodeToBinary()
         val socket = io.socket()
 
         launch(start = CoroutineStart.UNDISPATCHED) {
             val ev = socket.once("ack")
-            ev.ack?.invoke(*argsOf(buf))
+            ev.ack?.invoke(buf)
         }
         val ackBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("ackBack") }
 
@@ -177,7 +176,11 @@ class SocketTest {
         val binaryAckBack = ackBackDeferred.await()
 
         assertIs<Socket.Event.Custom>(binaryAckBack)
-        assertContentEquals(buf, binaryAckBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+        assertEquals(
+            buf,
+            binaryAckBack.payload.decodeJsonOrNull<Binary>(0),
+            "Binary ack should be equal to the sent buffer"
+        )
 
         socket.disconnect()
 
@@ -194,10 +197,14 @@ class SocketTest {
 
         // use Dispatchers.Default for realtime timeout
         val binaryAck = withContext(Dispatchers.Default) {
-            socket.sendWithAck("getAckBinary", *argsOf(""))
+            socket.sendWithAck("getAckBinary", "")
         }
 
-        assertContentEquals(buf, binaryAck[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+        assertEquals(
+            Binary(buf),
+            binaryAck.decodeJsonOrNull<Binary>(0),
+            "Binary ack should be equal to the sent buffer"
+        )
 
         socket.disconnect()
 
@@ -211,10 +218,10 @@ class SocketTest {
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
 
         socket.connect()
-        socket.send("echo", *argsOf(false))
+        socket.send("echo", false)
 
         val echoBack = echoBackDeferred.await()
-        assertEquals(false, echoBack.args[0].decodeJsonOrNull<Boolean>())
+        assertEquals(false, echoBack.payload.decodeJsonOrNull<Boolean>(0))
 
         socket.disconnect()
 
@@ -239,10 +246,10 @@ class SocketTest {
         }
 
         socket.connect()
-        expected.forEach { str -> socket.send("echo", *argsOf(str)) }
+        expected.forEach { str -> socket.send("echo", str) }
 
         val echoBacks = echoBackDeferred.await()
-        assertEquals(expected, echoBacks.map { it.args[0].decodeJsonOrNull<String>() })
+        assertEquals(expected, echoBacks.map { it.payload.decodeJsonOrNull<String>(0) })
 
         socket.disconnect()
         io.close()
@@ -360,7 +367,7 @@ class SocketTest {
         val io = io(httpClient)
 
         val socket = io.socket("/timeout") {
-            timeout = ZERO
+            timeout = Duration.ZERO
             reconnectionAttempts = 2
             reconnectionDelay = 10.milliseconds
         }
@@ -385,7 +392,7 @@ class SocketTest {
         val io = io(httpClient)
 
         val socket = io.socket("/timeout") {
-            timeout = ZERO
+            timeout = Duration.ZERO
             reconnectionAttempts = 3
             reconnectionDelay = 100.milliseconds
             randomizationFactor = 0.2
@@ -425,7 +432,7 @@ class SocketTest {
         val io = io(httpClient)
 
         val socket = io.socket("/invalid") {
-            timeout = ZERO
+            timeout = Duration.ZERO
             reconnectionDelay = 10.milliseconds
             autoConnect = false
         }
@@ -457,7 +464,7 @@ class SocketTest {
         val io = io(httpClient)
 
         val socket = io.socket("/timeout") {
-            timeout = ZERO
+            timeout = Duration.ZERO
             reconnectionAttempts = 2
             reconnectionDelay = 10.milliseconds
             autoConnect = false
@@ -549,7 +556,7 @@ class SocketTest {
         val io = io(httpClient)
 
         val socket = io.socket(namespace = "/timeout") {
-            timeout = ZERO
+            timeout = Duration.ZERO
             reconnectionAttempts = 2
             reconnectionDelay = 10.milliseconds
         }
@@ -598,10 +605,10 @@ class SocketTest {
 
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
         socket.connect()
-        socket.send("echo", *argsOf(date))
+        socket.send("echo", date)
 
         val echoBack = echoBackDeferred.await()
-        assertEquals(date, echoBack.args[0].decodeJsonOrNull<Instant>())
+        assertEquals(date, echoBack.payload.decodeJsonOrNull<Instant>(0))
 
         socket.disconnect()
 
@@ -616,10 +623,10 @@ class SocketTest {
 
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
         socket.connect()
-        socket.send("echo", *argsOf(mapOf("date" to date)))
+        socket.send("echo", mapOf("date" to date))
 
         val echoBack = echoBackDeferred.await()
-        val obj = echoBack.args[0].decodeJsonOrNull<JsonObject>()
+        val obj = echoBack.payload.decodeJsonOrNull<JsonObject>(0)
         val actualDate = obj?.get("date")
         assertIs<JsonPrimitive>(actualDate)
         assertEquals("$date", actualDate.content)
@@ -636,14 +643,57 @@ class SocketTest {
         }
         val socket = io.socket()
 
-        val buf = "asdfasdf".encodeToByteArray()
+        val buf = "asdfasdf".encodeToBinary()
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
 
         socket.connect()
-        socket.send("echo", *argsOf(buf))
+        socket.send("echo", buf)
 
         val echoBack = echoBackDeferred.await()
-        assertContentEquals(buf, echoBack.args[0].bytesOrNull, "Binary ack should be equal to the sent buffer")
+        assertEquals(
+            buf,
+            echoBack.payload.decodeJsonOrNull<Binary>(0),
+            "Binary ack should be equal to the sent buffer"
+        )
+
+        socket.disconnect()
+
+        io.close()
+    }
+
+    @Test
+    fun testSendMixedJsonWithBinaryData() = runTest(timeout = timeout) {
+        val io = io(httpClient) {
+            engineLoggingLevel = LoggingLevel.DEBUG
+        }
+        val socket = io.socket()
+
+        @Serializable
+        data class JsonWithBinary(
+            val hello: String,
+            val goodbye: String,
+            @Contextual val message: Binary
+        )
+
+        val binaryData = "howdy".encodeToBinary()
+        val jsonWithBinary = JsonWithBinary(
+            hello = "lol",
+            goodbye = "gotcha",
+            message = binaryData
+        )
+
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
+
+        socket.connect()
+        socket.send("echo", jsonWithBinary)
+
+        val echoBack = echoBackDeferred.await()
+        val result = echoBack.payload.decodeJsonOrNull<JsonWithBinary>(0)
+
+        assertNotNull(result, "Result should be a JSON object")
+        assertEquals("lol", result.hello)
+        assertEquals("gotcha", result.goodbye)
+        assertEquals(binaryData, result.message)
 
         socket.disconnect()
 

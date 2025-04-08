@@ -2,11 +2,15 @@ package io.voxkit.socketio.client
 
 import io.voxkit.engineio.client.CloseReason
 import io.voxkit.socketio.client.parser.Packet
+import io.voxkit.socketio.client.parser.ioJson
+import io.voxkit.socketio.client.util.packetPayloadOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
 
 /**
  * A Socket is the fundamental class for interacting with the server.
@@ -82,7 +86,7 @@ public interface Socket {
      * @param event The event name to send.
      * @param args The arguments to send with the event.
      */
-    public suspend fun send(event: String, vararg args: Packet.Data)
+    public suspend fun send(data: Packet.Payload)
 
     /**
      * Sends an event to the socket and waits for an acknowledgment from the server.
@@ -91,7 +95,7 @@ public interface Socket {
      * @param args The arguments to send with the event.
      * @return A list of [JsonObject] received as acknowledgment from the server.
      */
-    public suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data>
+    public suspend fun sendWithAck(data: Packet.Payload): Packet.Payload
 
     /**
      * The [Socket] event
@@ -136,7 +140,7 @@ public interface Socket {
         /**
          * Custom Socket.IO event.
          */
-        public data class Custom(val event: String, val args: List<Packet.Data>, val ack: Ack?) : Event
+        public data class Custom(val event: String, val payload: Packet.Payload, val ack: Ack?) : Event
     }
 
     /**
@@ -148,7 +152,7 @@ public interface Socket {
          *
          * @param args The arguments to send with the acknowledgment.
          */
-        public suspend operator fun invoke(vararg args: Packet.Data)
+        public suspend operator fun invoke(vararg args: Any)
     }
 }
 
@@ -169,7 +173,67 @@ public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filte
  */
 public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }
 
-
+/**
+ * Suspends until the first event of the specified type `T` is received.
+ *
+ * @return The first event of type `T`.
+ */
 public suspend inline fun <reified T : Socket.Event> Socket.once(): T = on<T>().first()
 
+/**
+ * Suspends until the first custom event with the specified name is received.
+ *
+ * @param event The name of the custom event to wait for.
+ * @return The first custom event with the specified name.
+ */
 public suspend fun Socket.once(event: String): Socket.Event.Custom = on(event).first()
+
+/**
+ * Sends an event with the specified name and arguments to the server.
+ *
+ * @param event The name of the event to send.
+ * @param args The arguments to send with the event.
+ */
+public suspend fun Socket.send(event: String, vararg args: Any) {
+    val data = packetPayloadOf(event, *args)
+    send(data)
+}
+
+/**
+ * Sends an event with the specified name and data to the server.
+ *
+ * @param event The name of the event to send.
+ * @param data The data to send with the event.
+ * @param T The type of the data being sent.
+ */
+public suspend inline fun <reified T : Any> Socket.send(event: String, data: T) {
+    val buffers = mutableListOf<ByteArray>()
+    val ioJson = ioJson(buffers)
+    send(Packet.Payload(listOf(JsonPrimitive(event), ioJson.encodeToJsonElement(data)), buffers))
+}
+
+/**
+ * Sends an event with the specified name and arguments to the server and waits for an acknowledgment.
+ *
+ * @param event The name of the event to send.
+ * @param args The arguments to send with the event.
+ * @return The acknowledgment payload received from the server.
+ */
+public suspend fun Socket.sendWithAck(event: String, vararg args: Any): Packet.Payload {
+    val data = packetPayloadOf(event, *args)
+    return sendWithAck(data)
+}
+
+/**
+ * Sends an event with the specified name and data to the server and waits for an acknowledgment.
+ *
+ * @param event The name of the event to send.
+ * @param data The data to send with the event.
+ * @param T The type of the data being sent.
+ * @return The acknowledgment payload received from the server.
+ */
+public suspend inline fun <reified T : Any> Socket.sendWithAck(event: String, data: T): Packet.Payload {
+    val buffers = mutableListOf<ByteArray>()
+    val ioJson = ioJson(buffers)
+    return sendWithAck(Packet.Payload(listOf(JsonPrimitive(event), ioJson.encodeToJsonElement(data)), buffers))
+}

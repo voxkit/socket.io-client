@@ -329,19 +329,19 @@ internal class VKManager(
         enginePacket: EnginePacket.Message,
         next: ReceiveChannel<EnginePacket>
     ): Packet {
-        var packet = parser.decode(enginePacket.data)
+        var decoded = parser.decode(enginePacket.data)
 
-        if (packet.type == Packet.Type.BINARY_EVENT || packet.type == Packet.Type.BINARY_ACK) {
-            var decoded: Parser.Decoded = Parser.Decoded.Partial(packet)
-            while (decoded !is Parser.Decoded.Completed) {
-                val nextEngineIoPacket = next.receive()
-                check(nextEngineIoPacket is EnginePacket.Binary)
-                decoded = parser.decodeBinary(nextEngineIoPacket.data, decoded)
+        return when (decoded) {
+            is Parser.Decoded.Completed -> decoded.packet
+            is Parser.Decoded.Partial1 -> {
+                while (decoded !is Parser.Decoded.Completed) {
+                    val nextEngineIoPacket = next.receive()
+                    check(nextEngineIoPacket is EnginePacket.Binary)
+                    decoded = parser.decodeBinary(nextEngineIoPacket.data, decoded)
+                }
+                decoded.packet
             }
-            packet = decoded.packet
         }
-
-        return packet
     }
 
     override fun socket(namespace: String, auth: AuthSocketOption?): Socket {

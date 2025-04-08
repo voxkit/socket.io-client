@@ -4,10 +4,9 @@ import io.voxkit.engineio.client.CloseReason
 import io.voxkit.socketio.client.Socket.Ack
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.Packet
-import io.voxkit.socketio.client.util.dataOf
+import io.voxkit.socketio.client.util.toPacketPayload
+import io.voxkit.socketio.client.util.packetPayloadOf
 import io.voxkit.socketio.client.util.decodeJsonOrNull
-import io.voxkit.socketio.client.util.jsonElementOrNull
-import io.voxkit.socketio.client.util.stringOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
@@ -87,28 +86,26 @@ internal class VKSocket(
 
     private fun Flow<Packet>.customEvents(): Flow<Event> {
         fun Packet.toCustomEventOrNull(): Event? {
-            require(type == Packet.Type.EVENT || type == Packet.Type.BINARY_EVENT) { "Packet type is not EVENT or BINARY_EVENT" }
+            require(type == Packet.Type.EVENT) { "Packet type is not EVENT" }
 
-            val event = data?.firstOrNull()?.jsonElementOrNull?.stringOrNull ?: run {
-                logger.w { "EVENT packet doesn't contain event name in data. Discard it. $data" }
+            val event = payload?.decodeJsonOrNull<String>(0) ?: run {
+                logger.w { "EVENT packet doesn't contain event name in data. Discard it. $payload" }
                 return null
             }
 
             val ack = ackId?.let {
                 Ack { args ->
-                    val hasBinaryData = args.any { it is Packet.Data.Binary }
-                    val ackType = if (hasBinaryData) Packet.Type.BINARY_ACK else Packet.Type.ACK
-                    val ackPacket = Packet(ackType, namespace, args.toList(), ackId)
+                    val ackPacket = Packet(Packet.Type.ACK, namespace, payload = packetPayloadOf(*args), ackId = ackId)
                     outgoingPackets.send(ackPacket)
                 }
             }
 
-            return Event.Custom(event, args = data.drop(1), ack = ack)
+            return Event.Custom(event, payload = payload.copy(data = payload.data.drop(1)), ack = ack)
         }
 
         return filter { it.namespace == namespace }.mapNotNull { packet ->
             when (packet.type) {
-                Packet.Type.EVENT, Packet.Type.BINARY_EVENT -> packet.toCustomEventOrNull()
+                Packet.Type.EVENT -> packet.toCustomEventOrNull()
                 else -> null
             }
         }
@@ -173,8 +170,7 @@ internal class VKSocket(
     }
 
     private suspend fun onConnectSuccess(packet: Packet) {
-        val packetData = packet.data?.firstOrNull() as? Packet.Data.Json
-        val success = packetData?.decodeJsonOrNull<ConnectSuccess>()
+        val success = packet.payload?.decodeJsonOrNull<ConnectSuccess>(0)
         logger.d { "Socket connected to namespace [$namespace]. SID: ${success?.sid}" }
         id = success?.sid
         state.value = State.Connected
@@ -182,8 +178,7 @@ internal class VKSocket(
     }
 
     private suspend fun onConnectError(packet: Packet) {
-        val packetData = packet.data?.firstOrNull() as? Packet.Data.Json
-        val error = packetData?.decodeJsonOrNull<ConnectError>()
+        val error = packet.payload?.decodeJsonOrNull<ConnectError>(0)
         logger.d { "Socket connection to namespace [$namespace] failed: ${error?.message}" }
         val e = SocketConnectException(error?.message ?: "Unknown error")
         state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, e)
@@ -197,6 +192,8 @@ internal class VKSocket(
         val disconnected = async(job, start = CoroutineStart.UNDISPATCHED) {
             state.filterIsInstance<State.Disconnected>().first()
         }
+
+        manager.onConnectSocket(this@VKSocket)
 
         connectAsync()
 
@@ -220,11 +217,9 @@ internal class VKSocket(
     }
 
     suspend fun sendConnectPacket() {
-        manager.onConnectSocket(this)
-
         runCatching {
-            val data = (auth ?: options.auth)?.let { dataOf(mapOf(it.paramName to it.token)) }
-            manager.send(Packet(Packet.Type.CONNECT, namespace, data))
+            val data = (auth ?: options.auth)?.let { mapOf(it.paramName to it.token).toPacketPayload() }
+            manager.send(Packet(Packet.Type.CONNECT, namespace, payload = data))
         }
     }
 
@@ -247,31 +242,26 @@ internal class VKSocket(
         }
     }
 
-    override suspend fun send(event: String, vararg args: Packet.Data) {
-        logger.i { "Send event: $event $args" }
-        val packetType = takeIf { args.any { it is Packet.Data.Binary } }
-            ?.let { Packet.Type.BINARY_EVENT }
-            ?: Packet.Type.EVENT
-        val packet = Packet(type = packetType, namespace = namespace, data = dataOf(event) + args.toList())
+    override suspend fun send(data: Packet.Payload) {
+        logger.i { "Send event: $data" }
+        val packet = Packet(type = Packet.Type.EVENT, namespace = namespace, payload = data)
         sendPacket(packet)
     }
 
-    override suspend fun sendWithAck(event: String, vararg args: Packet.Data): List<Packet.Data> = coroutineScope {
-        logger.i { "Send event with ack: $event $args" }
+    override suspend fun sendWithAck(data: Packet.Payload): Packet.Payload = coroutineScope {
+        logger.i { "Send event with ack: $data" }
         val packet = Packet(
             type = Packet.Type.EVENT,
             namespace = namespace,
-            data = dataOf(event) + args.toList(),
+            payload = data,
             ackId = ackId++,
         )
-        sendPacketWithAck(packet).data ?: emptyList()
+        checkNotNull(sendPacketWithAck(packet).payload) { "ACK packet doesn't contain data" }
     }
 
     private suspend fun sendPacketWithAck(packet: Packet): Packet = coroutineScope {
         val ackPacket = async(start = CoroutineStart.UNDISPATCHED) {
-            incomingPackets
-                .filter { it.type == Packet.Type.ACK || it.type == Packet.Type.BINARY_ACK }
-                .first { it.ackId == packet.ackId }
+            incomingPackets.filter { it.type == Packet.Type.ACK }.first { it.ackId == packet.ackId }
         }
         sendPacket(packet)
         withTimeout(options.ackTimeout) { ackPacket.await() }
