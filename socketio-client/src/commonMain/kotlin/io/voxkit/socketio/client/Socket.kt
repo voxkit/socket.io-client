@@ -1,0 +1,239 @@
+package io.voxkit.socketio.client
+
+import io.voxkit.engineio.client.CloseReason
+import io.voxkit.socketio.client.parser.Packet
+import io.voxkit.socketio.client.parser.ioJson
+import io.voxkit.socketio.client.util.packetPayloadOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
+
+/**
+ * A Socket is the fundamental class for interacting with the server.
+ * A Socket belongs to a certain Namespace (by default /) and uses an underlying [Manager] to communicate.
+ */
+public interface Socket {
+    /**
+     * Whether the socket will automatically try to reconnect.
+     */
+    public val active: Boolean
+
+    /**
+     * Whether the socket is currently connected to the server.
+     */
+    public val connected: Boolean
+
+    /**
+     * Whether the socket is currently disconnected from the server.
+     */
+    public val disconnected: Boolean
+
+    /**
+     * A unique identifier for the socket session. Set after the connect event is triggered,
+     * and updated after the reconnect event.
+     *
+     * **Caution:**
+     *
+     * The id attribute is an ephemeral ID that is not meant to be used in your application
+     * (or only for debugging purposes) because:
+     *
+     * - this ID is regenerated after each reconnection (for example when the WebSocket connection is severed,
+     *   or when the user refreshes the page)
+     * - two different browser tabs will have two different IDs
+     * - there is no message queue stored for a given ID on the server (i.e. if the client is disconnected,
+     *   the messages sent from the server to this ID are lost)
+     */
+    public val id: String?
+
+    /**
+     * A reference to the underlying [Manager] instance.
+     */
+    public val io: Manager
+
+    /**
+     * Whether the connection state was successfully recovered during the last reconnection.
+     */
+    public val recovered: Boolean
+
+    /**
+     * Socket events are emitted when the socket is connected, disconnected,
+     * or when an event is received from the server.
+     */
+    public val events: Flow<Event>
+
+    /**
+     * The namespace of the socket.
+     */
+    public val namespace: String
+
+    /**
+     * Manually connects the socket.
+     */
+    public suspend fun connect()
+
+    /**
+     * Manually disconnects the socket.
+     */
+    public suspend fun disconnect()
+
+    /**
+     * Sends an event to the socket.
+     *
+     * @param event The event name to send.
+     * @param args The arguments to send with the event.
+     */
+    public suspend fun send(data: Packet.Payload)
+
+    /**
+     * Sends an event to the socket and waits for an acknowledgment from the server.
+     *
+     * @param event The event name to send.
+     * @param args The arguments to send with the event.
+     * @return A list of [JsonObject] received as acknowledgment from the server.
+     */
+    public suspend fun sendWithAck(data: Packet.Payload): Packet.Payload
+
+    /**
+     * The [Socket] event
+     */
+    public sealed interface Event {
+        /**
+         * This event is fired by the [Socket] instance upon connection and reconnection.
+         */
+        public data object Connect : Event
+
+        /**
+         * This event is fired by the [Socket] instance upon connection failure.
+         */
+        public data class ConnectError(val error: Throwable) : Event
+
+        /**
+         * This event is fired by the [Socket] instance upon disconnection.
+         *
+         * Here is the list of possible reasons:
+         *```
+         *   | Reason                | Description                                               | Automatic     |
+         *   |                       |                                                           | reconnection? |
+         *   |-----------------------|-----------------------------------------------------------|---------------|
+         *   | io server disconnect  | The server has forcefully disconnected the socket with    | ❌ NO         |
+         *   |                       | socket.disconnect()                                       |               |
+         *   |-----------------------|-----------------------------------------------------------|---------------|
+         *   | io client disconnect  | The socket was manually disconnected using                | ❌ NO         |
+         *   |                       | socket.disconnect()                                       |               |
+         *   |-----------------------|-----------------------------------------------------------|---------------|
+         *   | ping timeout          | The server did not send a PING within the pingInterval +  | ✅ YES        |
+         *   |                       | pingTimeout range                                         |               |
+         *   |-----------------------|-----------------------------------------------------------|---------------|
+         *   | transport close       | The connection was closed (example: the user has lost     | ✅ YES        |
+         *   |                       | connection, or the network was changed from WiFi to 4G)   |               |
+         *   |-----------------------|-----------------------------------------------------------|---------------|
+         *   | transport error       | The connection has encountered an error (example: the     | ✅ YES        |
+         *   |                       | server was killed during a HTTP long-polling cycle)       |               |
+         *```
+         */
+        public data class Disconnect(val reason: CloseReason, val cause: Throwable?) : Event
+
+        /**
+         * Custom Socket.IO event.
+         */
+        public data class Custom(val event: String, val payload: Packet.Payload, val ack: Ack?) : Event
+    }
+
+    /**
+     * This interface is used to acknowledge the reception of an event.
+     */
+    public fun interface Ack {
+        /**
+         * This method is called when the event is acknowledged.
+         *
+         * @param args The arguments to send with the acknowledgment.
+         */
+        public suspend operator fun invoke(vararg args: Any)
+    }
+}
+
+/**
+ * Creates a flow of events filtered by the specified type `T` extending [Socket.Event].
+ * This allows subscribing to specific event types like [Socket.Event.Connect] or [Socket.Event.Disconnect].
+ *
+ * @return A [Flow] of events of type `T
+ */
+public inline fun <reified T : Socket.Event> Socket.on(): Flow<T> = events.filterIsInstance<T>()
+
+/**
+ * Creates a flow of custom events filtered by the specified event name.
+ * This allows subscribing to custom events emitted by the server.
+ *
+ * @param event The name of the event to filter on
+ * @return A [Flow] of [Socket.Event.Custom] with the matching event name
+ */
+public fun Socket.on(event: String): Flow<Socket.Event.Custom> = on<Socket.Event.Custom>().filter { it.event == event }
+
+/**
+ * Suspends until the first event of the specified type `T` is received.
+ *
+ * @return The first event of type `T`.
+ */
+public suspend inline fun <reified T : Socket.Event> Socket.once(): T = on<T>().first()
+
+/**
+ * Suspends until the first custom event with the specified name is received.
+ *
+ * @param event The name of the custom event to wait for.
+ * @return The first custom event with the specified name.
+ */
+public suspend fun Socket.once(event: String): Socket.Event.Custom = on(event).first()
+
+/**
+ * Sends an event with the specified name and arguments to the server.
+ *
+ * @param event The name of the event to send.
+ * @param args The arguments to send with the event.
+ */
+public suspend fun Socket.send(event: String, vararg args: Any) {
+    val data = packetPayloadOf(event, *args)
+    send(data)
+}
+
+/**
+ * Sends an event with the specified name and data to the server.
+ *
+ * @param event The name of the event to send.
+ * @param data The data to send with the event.
+ * @param T The type of the data being sent.
+ */
+public suspend inline fun <reified T : Any> Socket.send(event: String, data: T) {
+    val buffers = mutableListOf<ByteArray>()
+    val ioJson = ioJson(buffers)
+    send(Packet.Payload(listOf(JsonPrimitive(event), ioJson.encodeToJsonElement(data)), buffers))
+}
+
+/**
+ * Sends an event with the specified name and arguments to the server and waits for an acknowledgment.
+ *
+ * @param event The name of the event to send.
+ * @param args The arguments to send with the event.
+ * @return The acknowledgment payload received from the server.
+ */
+public suspend fun Socket.sendWithAck(event: String, vararg args: Any): Packet.Payload {
+    val data = packetPayloadOf(event, *args)
+    return sendWithAck(data)
+}
+
+/**
+ * Sends an event with the specified name and data to the server and waits for an acknowledgment.
+ *
+ * @param event The name of the event to send.
+ * @param data The data to send with the event.
+ * @param T The type of the data being sent.
+ * @return The acknowledgment payload received from the server.
+ */
+public suspend inline fun <reified T : Any> Socket.sendWithAck(event: String, data: T): Packet.Payload {
+    val buffers = mutableListOf<ByteArray>()
+    val ioJson = ioJson(buffers)
+    return sendWithAck(Packet.Payload(listOf(JsonPrimitive(event), ioJson.encodeToJsonElement(data)), buffers))
+}
