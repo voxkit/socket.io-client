@@ -8,6 +8,7 @@ import io.voxkit.socketio.client.util.toPacketPayload
 import io.voxkit.socketio.client.util.packetPayloadOf
 import io.voxkit.socketio.client.util.decodeJsonOrNull
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -71,8 +72,7 @@ internal class VKSocket(
     private val logger = loggerFactory.createLogger("Socket@${hashCode()} [$namespace]")
     private val job = SupervisorJob() + CoroutineName("Socket@${hashCode()}")
 
-    // TODO: atomic
-    private var ackId = 0L
+    private val ackId = atomic(0L)
     private val incomingPackets = manager.incoming.filter { it.namespace == namespace }
     private val outgoingPackets = Channel<Packet>(capacity = Channel.UNLIMITED)
     private val connectMutex = Mutex()
@@ -254,7 +254,7 @@ internal class VKSocket(
             type = Packet.Type.EVENT,
             namespace = namespace,
             payload = data,
-            ackId = ackId++,
+            ackId = ackId.getAndIncrement(),
         )
         checkNotNull(sendPacketWithAck(packet).payload) { "ACK packet doesn't contain data" }
     }

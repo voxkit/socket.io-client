@@ -28,8 +28,6 @@ public interface Manager {
      */
     public suspend fun send(packet: Packet)
 
-    public fun close()
-
     public sealed interface Event {
         /**
          * Fired upon a connection error.

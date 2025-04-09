@@ -6,12 +6,12 @@ import io.voxkit.socketio.client.util.namespace
 import io.voxkit.socketio.client.util.withoutNamespace
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import io.voxkit.socketio.logging.defaultLogger
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 public fun IO(
     httpClient: HttpClient,
@@ -26,17 +26,16 @@ public fun IO(
 public class IO internal constructor(
     private val httpClient: HttpClient,
     private val ioOptions: IOOptions,
-) : AutoCloseable {
+) : SynchronizedObject(), AutoCloseable {
 
     private val loggerFactory = VoxKitLoggerFactory(ioOptions.logger ?: defaultLogger(), ioOptions.loggingLevel)
     private val logger = loggerFactory.createLogger("IO")
     private val scope = CoroutineScope(SupervisorJob() + ioOptions.dispatcher + CoroutineName("IO"))
-    private var defaultManager: Manager? = null
-    private val managers = mutableSetOf<Manager>()
+    private var defaultManager: VKManager? = null
+    private val managers = mutableSetOf<VKManager>()
     private val namespaces = mutableSetOf<String>()
-    private val mutex = Mutex()
 
-    public suspend fun socket(urlString: String, block: ManagerOptionsBuilder.() -> Unit = {}): Socket {
+    public fun socket(urlString: String, block: ManagerOptionsBuilder.() -> Unit = {}): Socket {
         val url = Url(urlString)
         val options = ManagerOptionsBuilder().apply(block).build()
         val manager = if (ioOptions.forceNew) {
@@ -49,7 +48,7 @@ public class IO internal constructor(
         return manager.socket(url.namespace, auth = options.socketOption.auth)
     }
 
-    private fun manager(url: Url, options: ManagerOptions): Manager {
+    private fun manager(url: Url, options: ManagerOptions): VKManager {
         return VKManager(
             serverUrl = url.withoutNamespace,
             ioOptions = ioOptions,
@@ -60,14 +59,12 @@ public class IO internal constructor(
         )
     }
 
-    private suspend fun defaultOrCreateManager(url: Url, options: ManagerOptions): Manager {
-        mutex.withLock {
-            if (namespaces.contains(url.namespace)) {
-                return manager(url.withoutNamespace, options)
-            }
-            namespaces.add(url.namespace)
-            return defaultManager ?: manager(url, options).also { defaultManager = it }
+    private fun defaultOrCreateManager(url: Url, options: ManagerOptions): VKManager = synchronized(this) {
+        if (namespaces.contains(url.namespace)) {
+            return manager(url.withoutNamespace, options)
         }
+        namespaces.add(url.namespace)
+        defaultManager ?: manager(url, options).also { defaultManager = it }
     }
 
     override fun close() {

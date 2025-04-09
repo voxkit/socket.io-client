@@ -370,6 +370,7 @@ class SocketTest {
             timeout = Duration.ZERO
             reconnectionAttempts = 2
             reconnectionDelay = 10.milliseconds
+            autoConnect = false
         }
 
         val reconnectAttempts = mutableListOf<Int>()
@@ -731,7 +732,7 @@ class SocketTest {
         io.close()
     }
 
-    private suspend fun IO.socket(
+    private fun IO.socket(
         namespace: String = "/",
         queryString: String = "",
         block: ManagerOptionsBuilder.() -> Unit = {},

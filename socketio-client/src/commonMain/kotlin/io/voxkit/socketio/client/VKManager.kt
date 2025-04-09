@@ -10,6 +10,8 @@ import io.voxkit.socketio.client.parser.DefaultParser
 import io.voxkit.socketio.client.parser.Packet
 import io.voxkit.socketio.client.parser.Parser
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +26,7 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +39,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
@@ -50,7 +54,7 @@ internal class VKManager(
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
     private val loggerFactory: VoxKitLoggerFactory,
-) : Manager {
+) : SynchronizedObject(), Manager {
 
     private val _events = MutableSharedFlow<Event>()
     override val events: Flow<Event> = _events.asSharedFlow()
@@ -73,7 +77,6 @@ internal class VKManager(
     // Visible for testing
     val engine: StateFlow<Engine?> = _engine.asStateFlow()
 
-    // TODO: atomic
     private val sockets = mutableMapOf<String, VKSocket>()
     private val connectedSockets = MutableStateFlow<Set<String>>(emptySet())
     private val job = SupervisorJob() + CoroutineName("Manager@${hashCode()}")
@@ -344,8 +347,9 @@ internal class VKManager(
         }
     }
 
-    override fun socket(namespace: String, auth: AuthSocketOption?): Socket {
-        return sockets.getOrPut(namespace) {
+    override fun socket(namespace: String, auth: AuthSocketOption?): Socket = synchronized(this) {
+        job.ensureActive()
+        sockets.getOrPut(namespace) {
             VKSocket(
                 options = options.socketOption,
                 namespace = namespace,
@@ -386,9 +390,10 @@ internal class VKManager(
         }
     }
 
-    override fun close() {
+    fun close() = synchronized(this) {
         logger.d { "Close socket.io manager." }
         sockets.values.forEach { it.close() }
+        sockets.clear()
         job.cancel()
         state.value = State.Disconnected(CloseReason.CLIENT_DISCONNECT, CancellationException("Manager closed"))
         _engine.value?.close()
@@ -396,11 +401,11 @@ internal class VKManager(
     }
 
     fun onConnectSocket(socket: Socket) {
-        connectedSockets.value += socket.namespace
+        connectedSockets.update { it + socket.namespace }
     }
 
     fun onDisconnectSocket(socket: Socket) {
-        connectedSockets.value -= socket.namespace
+        connectedSockets.update { it - socket.namespace }
     }
 
     private sealed interface State {

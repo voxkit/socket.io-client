@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.atomicfu)
 }
 
 kotlin {
@@ -24,6 +25,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":engineio-client"))
+            implementation(libs.concurent.collections)
         }
 
         commonTest.dependencies {
