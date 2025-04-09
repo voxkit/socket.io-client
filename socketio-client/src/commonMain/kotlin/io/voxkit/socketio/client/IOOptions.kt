@@ -73,9 +73,9 @@ public class IOOptionsBuilder {
     /**
      * The dispatcher to use for coroutines.
      *
-     * Default: [Dispatchers.Main]
+     * Default: [Dispatchers.Default]
      */
-    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
+    public var dispatcher: CoroutineDispatcher = Dispatchers.Default
 
     internal fun build(): IOOptions {
         return IOOptions(

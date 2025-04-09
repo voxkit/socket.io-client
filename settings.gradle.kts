@@ -21,4 +21,5 @@ include(
     "engineio-client",
     "socketio-client",
     "logging",
+    "examples",
 )

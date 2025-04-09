@@ -6,7 +6,6 @@ import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -15,19 +14,16 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class BinaryPollingTest {
-    private val engineDispatcher = Dispatchers.Default.limitedParallelism(1)
-
     @Test
     fun receiveBinaryData() = runTest(timeout = TIMEOUT) {
         val values = Channel<Any>()
         val binaryData = ByteArray(5) { it.toByte() }
         val httpClient = ioHttpClient()
 
-        val session =  engineIO(httpClient) {
+        val session = engineIO(httpClient) {
             port = PORT
             transports = setOf(TransportType.POLLING)
             loggingLevel = LoggingLevel.DEBUG
-            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {
@@ -50,11 +46,10 @@ class BinaryPollingTest {
         val utf8String = "cash money €€€"
         val httpClient = ioHttpClient()
 
-        val session =  engineIO(httpClient) {
+        val session = engineIO(httpClient) {
             port = PORT
             transports = setOf(TransportType.POLLING)
             loggingLevel = LoggingLevel.DEBUG
-            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in session.incoming) {

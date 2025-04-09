@@ -14,8 +14,6 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class BinaryWSTest {
-    private val engineDispatcher = Dispatchers.Default.limitedParallelism(1)
-
     @Test
     fun receiveBinaryData() = runTest(timeout = TIMEOUT) {
         val values = Channel<Any>()
@@ -25,7 +23,6 @@ class BinaryWSTest {
         val engine = engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
-            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in engine.incoming) {
@@ -51,7 +48,6 @@ class BinaryWSTest {
         val engine = engineIO(httpClient) {
             port = PORT
             loggingLevel = LoggingLevel.DEBUG
-            dispatcher = engineDispatcher
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
             for (packet in engine.incoming) {

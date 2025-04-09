@@ -24,7 +24,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":engineio-client"))
+            api(project(":engineio-client"))
         }
 
         commonTest.dependencies {

@@ -117,11 +117,11 @@ internal class VoxKitSocket(
                 for (packet in outgoingPackets) {
                     state.first { it == State.Connected || it == State.Disconnecting }
                     if (packet.type == Packet.Type.DISCONNECT) {
+                        _events.emit(Event.Disconnect(CloseReason.CLIENT_DISCONNECT, null))
                         state.value = State.Disconnected(
                             CloseReason.CLIENT_DISCONNECT,
                             CancellationException("Client disconnect")
                         )
-                        _events.emit(Event.Disconnect(CloseReason.CLIENT_DISCONNECT, null))
                     }
                     sendPacketToManager(packet)
                     if (packet.type == Packet.Type.DISCONNECT) {

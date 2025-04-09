@@ -53,7 +53,7 @@ private fun jsonArray(list: List<*>, buffers: MutableList<ByteArray>): JsonArray
     return buildJsonArray { list.forEach { it.jsonElement(buffers) } }
 }
 
-internal inline fun packetPayloadOf(vararg args: Any): Packet.Payload {
+internal fun packetPayloadOf(vararg args: Any): Packet.Payload {
     val buffers = mutableListOf<ByteArray>()
     return Packet.Payload(args.map { it.jsonElement(buffers) }, buffers)
 }

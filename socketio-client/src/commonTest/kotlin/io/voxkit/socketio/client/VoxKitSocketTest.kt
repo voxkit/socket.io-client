@@ -41,8 +41,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class VoxKitSocketTest {
-    private val serverPort = 3000
-    private val serverUrl = "http://localhost:$serverPort"
+    private val serverUrl = "http://localhost:$PORT"
     private val timeout = 10.seconds
 
     private lateinit var httpClient: HttpClient
@@ -639,9 +638,7 @@ class VoxKitSocketTest {
 
     @Test
     fun testSendAndGetBinaryData() = runTest(timeout = timeout) {
-        val io = io(httpClient) {
-            engineLoggingLevel = LoggingLevel.DEBUG
-        }
+        val io = io(httpClient)
         val socket = io.socket()
 
         val buf = "asdfasdf".encodeToBinary()
@@ -664,9 +661,7 @@ class VoxKitSocketTest {
 
     @Test
     fun testSendMixedJsonWithBinaryData() = runTest(timeout = timeout) {
-        val io = io(httpClient) {
-            engineLoggingLevel = LoggingLevel.DEBUG
-        }
+        val io = io(httpClient)
         val socket = io.socket()
 
         @Serializable
@@ -703,9 +698,7 @@ class VoxKitSocketTest {
 
     @Test
     fun testSendEventsWithByteArraysInTheCorrectOrder() = runTest(timeout = timeout) {
-        val io = io(httpClient) {
-            engineLoggingLevel = LoggingLevel.DEBUG
-        }
+        val io = io(httpClient)
         val socket = io.socket()
 
         val buf1 = "buf1".encodeToBinary()
@@ -743,6 +736,5 @@ class VoxKitSocketTest {
     private fun io(httpClient: HttpClient, block: IOOptionsBuilder.() -> Unit = {}) = IO(httpClient) {
         block()
         loggingLevel = LoggingLevel.DEBUG
-        dispatcher = Dispatchers.Default
     }
 }

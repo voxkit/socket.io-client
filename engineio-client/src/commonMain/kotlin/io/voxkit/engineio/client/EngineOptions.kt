@@ -64,7 +64,7 @@ public class EngineOptionsBuilder {
 
     public var logger: Logger? = null
 
-    public var dispatcher: CoroutineDispatcher = Dispatchers.Main
+    public var dispatcher: CoroutineDispatcher = Dispatchers.Default
 
     internal fun build(): EngineIOOptions {
         require(transports.isNotEmpty()) { "At least one transport must be specified." }
