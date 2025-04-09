@@ -47,7 +47,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import io.voxkit.engineio.parser.Packet as EnginePacket
 
-internal class VKManager(
+internal class VoxKitManager(
     private val serverUrl: Url,
     private val ioOptions: IOOptions,
     val options: ManagerOptions,
@@ -77,7 +77,7 @@ internal class VKManager(
     // Visible for testing
     val engine: StateFlow<Engine?> = _engine.asStateFlow()
 
-    private val sockets = mutableMapOf<String, VKSocket>()
+    private val sockets = mutableMapOf<String, VoxKitSocket>()
     private val connectedSockets = MutableStateFlow<Set<String>>(emptySet())
     private val job = SupervisorJob() + CoroutineName("Manager@${hashCode()}")
     private val mutex = Mutex()
@@ -350,7 +350,7 @@ internal class VKManager(
     override fun socket(namespace: String, auth: AuthSocketOption?): Socket = synchronized(this) {
         job.ensureActive()
         sockets.getOrPut(namespace) {
-            VKSocket(
+            VoxKitSocket(
                 options = options.socketOption,
                 namespace = namespace,
                 manager = this,

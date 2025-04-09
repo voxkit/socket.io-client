@@ -40,7 +40,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class SocketTest {
+class VoxKitSocketTest {
     private val serverPort = 3000
     private val serverUrl = "http://localhost:$serverPort"
     private val timeout = 10.seconds
@@ -309,7 +309,7 @@ class SocketTest {
         socket.connect()
         withContext(Dispatchers.Default) { delay(500.milliseconds) }
 
-        (socket.io as VKManager).engine.value?.close()
+        (socket.io as VoxKitManager).engine.value?.close()
 
         job.join()
         io.close()
@@ -351,7 +351,7 @@ class SocketTest {
 
             socket.connect()
             withContext(Dispatchers.Default) { delay(500) }
-            (socket.io as VKManager).engine.value?.close()
+            (socket.io as VoxKitManager).engine.value?.close()
             job.join()
         }
 
@@ -492,7 +492,7 @@ class SocketTest {
         val socket1 = io.socket(namespace = "/")
         val socket2 = io.socket(namespace = "/asd")
         assertEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be the same")
-        val manger = (socket1.io as VKManager)
+        val manger = (socket1.io as VoxKitManager)
 
 
         var testPassed: Boolean? = null

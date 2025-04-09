@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 
 /**
  * Represents a session for Engine.IO.
@@ -78,7 +77,7 @@ public interface Engine {
  * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public fun CoroutineScope.engineIO(
+public fun engineIO(
     urlString: String,
     httpClient: HttpClient,
     block: EngineOptionsBuilder.() -> Unit = {}
@@ -123,12 +122,5 @@ private fun engineIO(httpClient: HttpClient, options: EngineIOOptions): Engine {
         TransportType.POLLING -> scope.pollingTransport(httpClient, options)
         TransportType.WEBSOCKET -> scope.webSocketTransport(httpClient, options)
     }
-    return VKEngine(initialTransport = transport, options = options, httpClient = httpClient, scope = scope)
-}
-
-/**
- * Awaits until the session is open.
- */
-public suspend fun Engine.awaitOpen() {
-    state.first { it == Engine.State.Open }
+    return VoxKitEngine(initialTransport = transport, options = options, httpClient = httpClient, scope = scope)
 }

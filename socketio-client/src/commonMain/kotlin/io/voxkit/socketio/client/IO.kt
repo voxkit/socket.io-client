@@ -31,8 +31,8 @@ public class IO internal constructor(
     private val loggerFactory = VoxKitLoggerFactory(ioOptions.logger ?: defaultLogger(), ioOptions.loggingLevel)
     private val logger = loggerFactory.createLogger("IO")
     private val scope = CoroutineScope(SupervisorJob() + ioOptions.dispatcher + CoroutineName("IO"))
-    private var defaultManager: VKManager? = null
-    private val managers = mutableSetOf<VKManager>()
+    private var defaultManager: VoxKitManager? = null
+    private val managers = mutableSetOf<VoxKitManager>()
     private val namespaces = mutableSetOf<String>()
 
     public fun socket(urlString: String, block: ManagerOptionsBuilder.() -> Unit = {}): Socket {
@@ -48,8 +48,8 @@ public class IO internal constructor(
         return manager.socket(url.namespace, auth = options.socketOption.auth)
     }
 
-    private fun manager(url: Url, options: ManagerOptions): VKManager {
-        return VKManager(
+    private fun manager(url: Url, options: ManagerOptions): VoxKitManager {
+        return VoxKitManager(
             serverUrl = url.withoutNamespace,
             ioOptions = ioOptions,
             options = options,
@@ -59,7 +59,7 @@ public class IO internal constructor(
         )
     }
 
-    private fun defaultOrCreateManager(url: Url, options: ManagerOptions): VKManager = synchronized(this) {
+    private fun defaultOrCreateManager(url: Url, options: ManagerOptions): VoxKitManager = synchronized(this) {
         if (namespaces.contains(url.namespace)) {
             return manager(url.withoutNamespace, options)
         }

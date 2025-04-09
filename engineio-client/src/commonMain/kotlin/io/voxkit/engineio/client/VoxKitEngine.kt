@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-internal class VKEngine(
+internal class VoxKitEngine(
     private val initialTransport: Transport,
     private val options: EngineIOOptions,
     private val httpClient: HttpClient,

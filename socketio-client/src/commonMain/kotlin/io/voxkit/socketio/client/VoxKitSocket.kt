@@ -36,10 +36,10 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlin.coroutines.coroutineContext
 
-internal class VKSocket(
+internal class VoxKitSocket(
     private val options: SocketOptions,
     override val namespace: String,
-    private val manager: VKManager,
+    private val manager: VoxKitManager,
     private val auth: AuthSocketOption?,
     private val scope: CoroutineScope,
     loggerFactory: VoxKitLoggerFactory,
@@ -199,7 +199,7 @@ internal class VKSocket(
             state.filterIsInstance<State.Disconnected>().first()
         }
 
-        manager.onConnectSocket(this@VKSocket)
+        manager.onConnectSocket(this@VoxKitSocket)
 
         connectAsync()
 
