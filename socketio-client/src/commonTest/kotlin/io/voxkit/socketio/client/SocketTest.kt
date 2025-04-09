@@ -700,6 +700,37 @@ class SocketTest {
         io.close()
     }
 
+    @Test
+    fun testSendEventsWithByteArraysInTheCorrectOrder() = runTest(timeout = timeout) {
+        val io = io(httpClient) {
+            engineLoggingLevel = LoggingLevel.DEBUG
+        }
+        val socket = io.socket()
+
+        val buf1 = "buf1".encodeToBinary()
+        val buf3 = "buf3".encodeToBinary()
+
+        val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
+
+        socket.connect()
+        socket.send("echo", buf1, "should be second", buf3)
+
+        val echoBack = echoBackDeferred.await()
+        assertEquals(
+            listOf(buf1, "should be second", buf3),
+            listOf(
+                echoBack.payload.decodeJsonOrNull<Binary>(0),
+                echoBack.payload.decodeJsonOrNull<String>(1),
+                echoBack.payload.decodeJsonOrNull<Binary>(2),
+            ),
+            "Binary ack should be equal to the sent buffer"
+        )
+
+        socket.disconnect()
+
+        io.close()
+    }
+
     private suspend fun IO.socket(
         namespace: String = "/",
         queryString: String = "",
