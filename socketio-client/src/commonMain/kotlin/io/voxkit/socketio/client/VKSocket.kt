@@ -4,9 +4,9 @@ import io.voxkit.engineio.client.CloseReason
 import io.voxkit.socketio.client.Socket.Ack
 import io.voxkit.socketio.client.Socket.Event
 import io.voxkit.socketio.client.parser.Packet
-import io.voxkit.socketio.client.util.toPacketPayload
-import io.voxkit.socketio.client.util.packetPayloadOf
 import io.voxkit.socketio.client.util.decodeJsonOrNull
+import io.voxkit.socketio.client.util.packetPayloadOf
+import io.voxkit.socketio.client.util.toPacketPayload
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CancellationException
@@ -161,8 +161,8 @@ internal class VKSocket(
             incomingPackets.collect { packet ->
                 when (packet.type) {
                     Packet.Type.CONNECT -> onConnectSuccess(packet)
-                    Packet.Type.DISCONNECT -> TODO("Handling DISCONNECT packet is not implemented yet!!!!")
                     Packet.Type.CONNECT_ERROR -> onConnectError(packet)
+                    Packet.Type.DISCONNECT -> onDisconnectByServer()
                     else -> Unit // ignore other packets
                 }
             }
@@ -183,6 +183,12 @@ internal class VKSocket(
         val e = SocketConnectException(error?.message ?: "Unknown error")
         state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, e)
         _events.emit(Event.ConnectError(e))
+    }
+
+    private suspend fun onDisconnectByServer() {
+        manager.onDisconnectSocket(this)
+        state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, CancellationException("Server disconnect"))
+        _events.emit(Event.Disconnect(CloseReason.SERVER_DISCONNECT, null))
     }
 
     override suspend fun connect() = coroutineScope {

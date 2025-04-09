@@ -25,7 +25,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":engineio-client"))
-            implementation(libs.concurent.collections)
         }
 
         commonTest.dependencies {
