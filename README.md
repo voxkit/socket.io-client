@@ -1,6 +1,6 @@
 # Socket.IO Client for Kotlin Multiplatform
 
-A Kotlin Multiplatform implementation of the [Socket.IO](https://socket.io/) client protocol.
+A Kotlin Multiplatform implementation of the [Socket.IO](https://socket.io/) client protocol based on [Ktor](https://ktor.io/).
 
 ## Features
 

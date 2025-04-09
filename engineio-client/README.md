@@ -1,7 +1,7 @@
 # Engine.IO Client for Kotlin Multiplatform
 
 A Kotlin Multiplatform implementation of the [Engine.IO](https://socket.io/docs/v4/engine-io-protocol/) client protocol
-based on top of [Ktor](https://ktor.io/).
+based on [Ktor](https://ktor.io/).
 
 ## Features
 
