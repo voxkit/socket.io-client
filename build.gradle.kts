@@ -8,9 +8,8 @@ plugins {
 }
 
 val GROUP: String by project
-val VERSION_NAME: String by project
 
-allprojects {
-    group = "io.voxkit"
-    version = "0.1.0"
+subprojects {
+    group = GROUP
+    version = System.getenv("VERSION") ?: "0.0.0"
 }
