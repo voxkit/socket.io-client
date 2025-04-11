@@ -12,7 +12,7 @@ sl4j-android = "1.7.36"
 agp = "8.2.2"
 ktlint = "12.2.0"
 atomicfu = "0.27.0"
-maven-publiosh = "0.31.0"
+maven-publish = "0.31.0"
 
 #Android
 minSdk = "21"
@@ -37,4 +37,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 atomicfu = { id = "org.jetbrains.kotlinx.atomicfu", version.ref = "atomicfu" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publiosh" }
+mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
