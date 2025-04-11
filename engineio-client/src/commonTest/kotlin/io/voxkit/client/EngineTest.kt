@@ -1,5 +1,6 @@
 package io.voxkit.client
 
+import io.ktor.client.plugins.logging.*
 import io.voxkit.engineio.client.engineIO
 import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.client.transports.TransportType
@@ -16,7 +17,11 @@ import kotlin.test.assertEquals
 
 class EngineTest {
     private val serverPort = 3000
-    private val httpClient = ioHttpClient()
+    private val httpClient = ioHttpClient {
+        install(Logging) {
+            level = LogLevel.ALL
+        }
+    }
     private val engineDispatcher = Dispatchers.Default.limitedParallelism(1)
 
     @Test
@@ -67,7 +72,7 @@ class EngineTest {
         val responseHeaders = engine.call.filterNotNull().first().response.headers
         engine.close()
 
-        assertEquals(listOf("hi", "bar"), responseHeaders?.getAll("X-EngineIO"))
+        assertEquals(listOf("hi", "bar"), responseHeaders.getAll("X-EngineIO"))
     }
 
     @Test
@@ -83,6 +88,6 @@ class EngineTest {
         val responseHeaders = engine.call.filterNotNull().first().response.headers
         engine.close()
 
-        assertEquals(listOf("hi", "bar"), responseHeaders?.getAll("X-EngineIO"))
+        assertEquals(listOf("hi", "bar"), responseHeaders.getAll("X-EngineIO"))
     }
 }

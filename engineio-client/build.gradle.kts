@@ -34,7 +34,7 @@ kotlin {
         val jvmAndAndroid by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation(libs.ktor.client.okhttp)
+                implementation(libs.ktor.client.cio)
             }
         }
 
@@ -47,12 +47,13 @@ kotlin {
         }
 
         appleMain.dependencies {
-            implementation(libs.ktor.client.darwin)
+            implementation(libs.ktor.client.cio)
         }
 
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlin.coroutines.test)
+            implementation(libs.ktor.client.logging)
         }
 
         jvmTest.dependencies {
