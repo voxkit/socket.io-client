@@ -58,6 +58,8 @@ private class WebSocketTransport(
             .first()
             .getOrThrow()
 
+        _call.value = session.call
+
         while (true) {
             when (val frame = session.incoming.receive()) {
                 is Frame.Binary -> {
