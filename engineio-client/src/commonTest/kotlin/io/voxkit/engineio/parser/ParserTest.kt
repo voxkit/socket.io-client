@@ -8,12 +8,12 @@ import kotlin.test.assertIs
 
 class ParserTest {
     @Test
-    fun encodeAsString() {
+    fun testEncodeAsString() {
         assertIs<String>(Parser.encodePacket(Packet.Message("test")))
     }
 
     @Test
-    fun decodeAsPacket() {
+    fun testDecodeAsPacket() {
         val encoded = Parser.encodePacket(Packet.Message("test"))
         val p = Parser.decodePacket(encoded as String)
         assertIs<Packet.Message>(p)
@@ -21,7 +21,7 @@ class ParserTest {
     }
 
     @Test
-    fun noData() {
+    fun testNoData() {
         val data = Parser.encodePacket(Packet.Message())
         val p = Parser.decodePacket(data as String)
         assertIs<Packet.Message>(p)
@@ -29,7 +29,7 @@ class ParserTest {
     }
 
     @Test
-    fun encodeOpenPacket() {
+    fun testEncodeOpenPacket() {
         val packet = Packet.Open(
             sid = "123",
             upgrades = listOf("websocket"),
@@ -46,14 +46,14 @@ class ParserTest {
     }
 
     @Test
-    fun encodeClosePacket() {
+    fun testEncodeClosePacket() {
         val data = Parser.encodePacket(Packet.Close)
         val p = Parser.decodePacket(data as String)
         assertEquals(Packet.Close, p)
     }
 
     @Test
-    fun encodePingPacket() {
+    fun testEncodePingPacket() {
         val data = Parser.encodePacket(Packet.Ping("1"))
         val p = Parser.decodePacket(data as String)
         assertIs<Packet.Ping>(p)
@@ -61,7 +61,7 @@ class ParserTest {
     }
 
     @Test
-    fun encodeMessagePacket() {
+    fun testEncodeMessagePacket() {
         val data = Parser.encodePacket(Packet.Message("aaa"))
         val p = Parser.decodePacket(data as String)
         assertIs<Packet.Message>(p, "Packet should be of type Message.Text (encoded payload: $data)")
@@ -69,7 +69,7 @@ class ParserTest {
     }
 
     @Test
-    fun encodeMessagePacketWithBinaryData() {
+    fun testEncodeMessagePacketWithBinaryData() {
         val data = Parser.encodePacket(Packet.Binary(byteArrayOf(1, 2, 3)))
         val p = Parser.decodePacket(data as ByteArray)
         assertIs<Packet.Binary>(p)
@@ -77,28 +77,28 @@ class ParserTest {
     }
 
     @Test
-    fun decodeEmptyPayload() {
+    fun testDecodeEmptyPayload() {
         val p = Parser.decodePacket(null as String?)
         assertIs<Packet.Error>(p)
         assertContains(p.data, ERROR_DATA)
     }
 
     @Test
-    fun decodeBadFormat() {
+    fun testDecodeBadFormat() {
         val p = Parser.decodePacket(":::")
         assertIs<Packet.Error>(p)
         assertContains(p.data, ERROR_DATA)
     }
 
     @Test
-    fun decodeTextPacket() {
+    fun testDecodeTextPacket() {
         val p = Parser.decodePacket("4test")
         assertIs<Packet.Message>(p)
         assertEquals("test", p.data)
     }
 
     @Test
-    fun encodePayloads() {
+    fun testEncodePayloads() {
         val data = Parser.encodePayload(listOf(Packet.Ping(), Packet.Pong()))
         assertIs<String>(data)
         assertEquals("2\u001e3", data)
@@ -111,20 +111,20 @@ class ParserTest {
     }
 
     @Test
-    fun encodeAndDecodePayloads() {
+    fun testEncodeAndDecodePayloads() {
         val data = Parser.encodePayload(listOf(Packet.Message("a")))
         assertEquals(1, Parser.decodePayload(data).size)
     }
 
     @Test
-    fun decodePacketWithInvalidType() {
+    fun testDecodePacketWithInvalidType() {
         val p = Parser.decodePacket("9invalid")
         assertIs<Packet.Error>(p)
         assertContains(p.data, ERROR_DATA)
     }
 
     @Test
-    fun decodePayloadWithMultiplePackets() {
+    fun testDecodePayloadWithMultiplePackets() {
         val data = "2\u001e3"
 
         val packets = Parser.decodePayload(data)
@@ -135,7 +135,7 @@ class ParserTest {
     }
 
     @Test
-    fun decodePayloadWithInvalidPacket() {
+    fun testDecodePayloadWithInvalidPacket() {
         val data = "2\u001e9invalid"
 
         val packets = Parser.decodePayload(data)
@@ -147,7 +147,7 @@ class ParserTest {
     }
 
     @Test
-    fun encodeMixedBinaryAndStringContents() {
+    fun testEncodeMixedBinaryAndStringContents() {
         val binaryData = byteArrayOf(1, 2, 3)
         val stringData = "test"
         val packets = listOf(
