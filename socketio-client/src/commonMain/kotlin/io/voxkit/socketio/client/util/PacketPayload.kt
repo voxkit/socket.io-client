@@ -24,7 +24,7 @@ import kotlinx.serialization.serializer
 public inline fun <reified T> Packet.Payload.decodeJsonOrNull(index: Int): T? {
     val jsonElement = data.getOrNull(index) ?: return null
     val ioJson = ioJson(buffers)
-    return ioJson.decodeFromJsonElement(jsonElement)
+    return runCatching { ioJson.decodeFromJsonElement<T>(jsonElement) }.getOrNull()
 }
 
 internal fun Any?.jsonElement(buffers: MutableList<ByteArray>): JsonElement {

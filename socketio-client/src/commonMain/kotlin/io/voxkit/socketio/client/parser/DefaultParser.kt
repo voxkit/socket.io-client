@@ -119,11 +119,17 @@ internal class DefaultParser : Parser {
         buffers: MutableList<ByteArray> = mutableListOf()
     ): Packet {
         val jsonElement = payload?.let { NON_BINARY_JSON.decodeFromString<JsonElement>(it) }
-        require(jsonElement == null || jsonElement is JsonObject || jsonElement is JsonArray) { "Invalid JSON payload: $payload" }
+        require(
+            jsonElement == null ||
+                    jsonElement is JsonObject ||
+                    jsonElement is JsonArray ||
+                    jsonElement is JsonPrimitive
+        ) { "Invalid JSON payload: $payload" }
 
         val packetData = when (jsonElement) {
             is JsonObject -> listOf(jsonElement)
             is JsonArray -> jsonElement.map { it }
+            is JsonPrimitive -> listOf(jsonElement)
             null -> null
             else -> error("Invalid JSON data type")
         }

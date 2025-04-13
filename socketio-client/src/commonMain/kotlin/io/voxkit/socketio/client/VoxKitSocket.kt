@@ -178,9 +178,12 @@ internal class VoxKitSocket(
     }
 
     private suspend fun onConnectError(packet: Packet) {
-        val error = packet.payload?.decodeJsonOrNull<ConnectError>(0)
-        logger.d { "Socket connection to namespace [$namespace] failed: ${error?.message}" }
-        val e = SocketConnectException(error?.message ?: "Unknown error")
+        val errorMessage = packet.payload?.decodeJsonOrNull<ConnectError>(0)?.message
+            ?: packet.payload?.decodeJsonOrNull<String>(0)
+            ?: packet.payload?.data?.firstOrNull()?.toString()
+            ?: "Unknown error"
+        logger.d { "Socket connection to namespace [$namespace] failed: $errorMessage" }
+        val e = SocketConnectException(errorMessage)
         state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, e)
         _events.emit(Event.ConnectError(e))
     }

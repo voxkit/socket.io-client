@@ -10,7 +10,6 @@ import io.voxkit.engineio.parser.Parser
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
@@ -38,23 +37,27 @@ private class WebSocketTransport(
     override val type: TransportType = TransportType.WEBSOCKET
 
     private val logger = options.loggerFactory.createLogger("engine.io websocket")
-    private var webSocketSession = MutableStateFlow<DefaultClientWebSocketSession?>(null)
+    private var webSocketSession = MutableStateFlow<Result<DefaultClientWebSocketSession>?>(null)
     private val job = SupervisorJob()
 
     init {
         logger.i { "WebSocket transport created." }
         scope.launch(job) {
-            val session = httpClient.webSocketSession {
-                options.buildRequest(TransportType.WEBSOCKET, sid, builder = this)
+            webSocketSession.value = runCatching {
+                httpClient.webSocketSession {
+                    options.buildRequest(TransportType.WEBSOCKET, sid, builder = this)
+                }
             }
-            webSocketSession.value = session
-            _call.value = session.call
         }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val incoming: ReceiveChannel<Packet> = scope.produce(job + CoroutineName("incoming [websocket]")) {
-        val session = webSocketSession.filterNotNull().first()
+        val session = webSocketSession
+            .filterNotNull()
+            .first()
+            .getOrThrow()
+
         while (true) {
             when (val frame = session.incoming.receive()) {
                 is Frame.Binary -> {
@@ -78,7 +81,7 @@ private class WebSocketTransport(
     override val call: StateFlow<HttpClientCall?> = _call.asStateFlow()
 
     override suspend fun send(packet: Packet) {
-        val session = webSocketSession.filterNotNull().first()
+        val session = webSocketSession.filterNotNull().first().getOrThrow()
         when (val encodedPacket = Parser.encodePacket(packet)) {
             is ByteArray -> session.send(encodedPacket)
             is String -> session.send(encodedPacket)
@@ -89,8 +92,8 @@ private class WebSocketTransport(
     override fun close() {
         logger.i { "Close WebSocket transport." }
         scope.launch {
-            val session = webSocketSession.filterNotNull().first()
-            session.close()
+            val session = webSocketSession.filterNotNull().first().getOrNull()
+            session?.close()
             job.cancel()
             logger.d { "WebSocket transport closed" }
         }
