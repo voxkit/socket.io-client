@@ -17,7 +17,7 @@ public sealed interface Packet {
         val upgrades: List<String>,
         val pingInterval: Long,
         val pingTimeout: Long,
-        val maxPayload: Long,
+        val maxPayload: Long? = null,
     ) : Packet
 
     /**

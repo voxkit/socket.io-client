@@ -14,7 +14,7 @@ class YeastTest {
     }
 
     @Test
-    fun prependsIteratedSeedWhenSamePreviousId() {
+    fun testPrependsIteratedSeedWhenSamePreviousId() {
         waitUntilNextMillisecond()
 
         val ids = listOf(Yeast.yeast(), Yeast.yeast(), Yeast.yeast())
@@ -24,7 +24,7 @@ class YeastTest {
     }
 
     @Test
-    fun resetsTheSeed() {
+    fun testResetsTheSeed() {
         waitUntilNextMillisecond()
 
         val ids = listOf(Yeast.yeast(), Yeast.yeast(), Yeast.yeast())
@@ -41,7 +41,7 @@ class YeastTest {
     }
 
     @Test
-    fun doesNotCollide() {
+    fun testDoesNotCollide() {
         val length = 30000
         val ids = mutableListOf<String>()
 
@@ -55,7 +55,7 @@ class YeastTest {
     }
 
     @Test
-    fun canConvertIdToTimestamp() {
+    fun testCanConvertIdToTimestamp() {
         waitUntilNextMillisecond()
 
         val now = Clock.System.now().toEpochMilliseconds()
