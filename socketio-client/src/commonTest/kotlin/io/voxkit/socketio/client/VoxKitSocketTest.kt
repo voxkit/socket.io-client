@@ -318,7 +318,9 @@ class VoxKitSocketTest {
     fun testReconnectManually() = runTest(timeout = timeout) {
         val io = io(httpClient)
 
-        val socket = io.socket()
+        val socket = io.socket {
+            autoConnect = false
+        }
 
         val job = launch(start = CoroutineStart.UNDISPATCHED) {
             socket.once<Socket.Event.Disconnect>()
@@ -326,6 +328,7 @@ class VoxKitSocketTest {
                 socket.once<Socket.Event.Connect>()
             }
 
+            withContext(Dispatchers.Default) { delay(500) }
             socket.connect()
             job.join()
         }

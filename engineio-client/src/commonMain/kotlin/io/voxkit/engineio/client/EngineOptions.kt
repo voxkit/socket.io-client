@@ -4,6 +4,7 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Parser
+import io.voxkit.engineio.util.calculateTransports
 import io.voxkit.socketio.logging.LoggingLevel
 import io.voxkit.socketio.logging.Logger
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
@@ -88,19 +89,13 @@ internal fun EngineOptionsBuilder(url: String): EngineOptionsBuilder {
 }
 
 internal fun EngineOptionsBuilder(url: Url): EngineOptionsBuilder {
-    val transportSet = when {
-        url.protocol.name.startsWith("http") -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
-        url.protocol.name.startsWith("ws") -> setOf(TransportType.WEBSOCKET)
-        else -> setOf(TransportType.POLLING, TransportType.WEBSOCKET)
-    }
-
     return EngineOptionsBuilder().apply {
         host = url.host
         port = url.port
         path = url.encodedPath
         secure = url.protocol == URLProtocol.HTTPS || url.protocol == URLProtocol.WSS
         parameters.appendAll(url.parameters)
-        transports = transportSet
+        transports = url.calculateTransports()
     }
 }
 
