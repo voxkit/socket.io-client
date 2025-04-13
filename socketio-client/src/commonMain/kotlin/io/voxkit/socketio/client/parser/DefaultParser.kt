@@ -131,7 +131,6 @@ internal class DefaultParser : Parser {
             is JsonArray -> jsonElement.map { it }
             is JsonPrimitive -> listOf(jsonElement)
             null -> null
-            else -> error("Invalid JSON data type")
         }
 
         val packet = Packet(
