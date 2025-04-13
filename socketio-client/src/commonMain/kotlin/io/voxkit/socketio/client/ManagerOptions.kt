@@ -103,14 +103,13 @@ public class ManagerOptionsBuilder {
     /**
      * The transports to use.
      *
-     * Default is [TransportType.POLLING] and [TransportType.WEBSOCKET].
+     * Default is `null` and will be determined by server URL protocol:
+     * HTTP(S) - [TransportType.POLLING, TransportType.WEBSOCKET]
+     * WS(S) - [TransportType.WEBSOCKET]
      */
-    public var transports: Set<TransportType> = setOf(
-        TransportType.POLLING,
-        TransportType.WEBSOCKET
-    )
+    public var transports: Set<TransportType>? = null
 
-    public var engineOptions:EngineOptionsBuilder = EngineOptionsBuilder()
+    public var engineOptions: EngineOptionsBuilder = EngineOptionsBuilder()
 
     public val socketBuilder: SocketOptionsBuilder = SocketOptionsBuilder()
 
@@ -149,7 +148,7 @@ internal data class ManagerOptions(
     val timeout: Duration,
     val timestampParam: String,
     val timestampRequests: Boolean,
-    val transports: Set<TransportType>,
+    val transports: Set<TransportType>?,
     val socketOption: SocketOptions,
 )
 

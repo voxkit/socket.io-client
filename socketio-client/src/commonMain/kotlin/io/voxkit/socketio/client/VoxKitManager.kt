@@ -276,7 +276,7 @@ internal class VoxKitManager(
             headers.appendAll(options.headers)
             parameters.appendAll(options.parameters)
             timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
-            transports = options.transports
+            options.transports?.let { transports = it }
             loggingLevel = ioOptions.engineLoggingLevel
             logger = ioOptions.logger
             dispatcher = ioOptions.dispatcher
