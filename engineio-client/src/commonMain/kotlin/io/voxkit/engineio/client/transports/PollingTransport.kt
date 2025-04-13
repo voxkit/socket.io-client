@@ -11,7 +11,6 @@ import io.voxkit.engineio.parser.Parser
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 internal fun CoroutineScope.pollingTransport(httpClient: HttpClient, options: EngineIOOptions): Transport {
     return PollingTransport(scope = this, httpClient = httpClient, options = options)
@@ -80,14 +78,8 @@ internal class PollingTransport(
 
                 packets.forEach { send(it) }
             } else {
-                val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
-                val errorMessage =
-                    "Polling request failed: HTTP ${response.status.value} ${response.status.description}. " +
-                            "URL: ${response.request.url}, " +
-                            "Method: ${response.request.method.value}, " +
-                            "Response: ${errorBody.take(100)}${if (errorBody.length > 100) "..." else ""}"
                 state.value = State.CLOSED
-                throw TransportException(errorMessage)
+                throw TransportException(response)
             }
         }
     }
@@ -105,13 +97,7 @@ internal class PollingTransport(
         }
 
         if (!response.status.isSuccess()) {
-            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
-            val message = "Failed to send packet: HTTP ${response.status.value} ${response.status.description}. " +
-                    "URL: ${response.request.url}, " +
-                    "Method: POST, " +
-                    "Content-Type: ${response.request.contentType()}, " +
-                    "Response: ${errorBody.take(100)}${if (errorBody.length > 100) "..." else ""}"
-            throw TransportException(message)
+            throw TransportException(response)
         }
     }
 

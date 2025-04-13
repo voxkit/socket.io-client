@@ -306,7 +306,6 @@ internal class VoxKitManager(
                     else -> throw e
                 }
             }.getOrThrow()
-
         }
     }
 

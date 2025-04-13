@@ -351,7 +351,9 @@ class VoxKitSocketTest {
                 socket.io.events.filterIsInstance<Manager.Event.Reconnect>().first()
             }
 
+            withContext(Dispatchers.Default) { delay(500) }
             socket.connect()
+
             withContext(Dispatchers.Default) { delay(500) }
             (socket.io as VoxKitManager).engine.value?.close()
             job.join()
