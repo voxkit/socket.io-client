@@ -116,6 +116,30 @@ class ParserTest {
     }
 
     @Test
+    fun testDecodeOpenPacket() {
+        val data = "0{\"sid\":\"123\",\"upgrades\":[\"websocket\"],\"pingInterval\":1000,\"pingTimeout\":2000,\"maxPayload\":100000}"
+        val p = Parser.decodePacket(data)
+        assertIs<Packet.Open>(p)
+        assertEquals("123", p.sid)
+        assertEquals(listOf("websocket"), p.upgrades)
+        assertEquals(1000, p.pingInterval)
+        assertEquals(2000, p.pingTimeout)
+        assertEquals(100000, p.maxPayload)
+    }
+
+    @Test
+    fun testDecodeOpenPacketWithoutMaxPayload() {
+        val data = "0{\"sid\":\"123\",\"upgrades\":[\"websocket\"],\"pingInterval\":1000,\"pingTimeout\":2000}"
+        val p = Parser.decodePacket(data)
+        assertIs<Packet.Open>(p)
+        assertEquals("123", p.sid)
+        assertEquals(listOf("websocket"), p.upgrades)
+        assertEquals(1000, p.pingInterval)
+        assertEquals(2000, p.pingTimeout)
+        assertEquals(null, p.maxPayload)
+    }
+
+    @Test
     fun testDecodeTextPacket() {
         val p = Parser.decodePacket("4test")
         assertIs<Packet.Message>(p)
