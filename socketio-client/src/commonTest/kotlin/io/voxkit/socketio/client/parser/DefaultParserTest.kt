@@ -169,12 +169,12 @@ class DefaultParserTest {
             Triple(
                 """4{"message":"Not authorized"}""",
                 Packet(Packet.Type.CONNECT_ERROR, payload = ConnectError(message = "Not authorized").toPacketPayload()),
-                """Failed to decode CONNECT_ERROR packet with data"""
+                "Failed to decode CONNECT_ERROR packet with data"
             ),
             Triple(
                 """4"Not authorized"""",
                 Packet(Packet.Type.CONNECT_ERROR, payload = packetPayloadOf("Not authorized")),
-                """Failed to decode CONNECT_ERROR packet with data"""
+                "Failed to decode CONNECT_ERROR packet with data"
             ),
             Triple(
                 "1",
