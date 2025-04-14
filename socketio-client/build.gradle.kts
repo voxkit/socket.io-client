@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.atomicfu)
+    alias(libs.plugins.ktlint)
 }
 
 kotlin {

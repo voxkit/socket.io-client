@@ -77,11 +77,8 @@ public interface Engine {
  * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public fun engineIO(
-    urlString: String,
-    httpClient: HttpClient,
-    block: EngineOptionsBuilder.() -> Unit = {}
-): Engine = engineIO(Url(urlString), httpClient, block)
+public fun engineIO(urlString: String, httpClient: HttpClient, block: EngineOptionsBuilder.() -> Unit = {}): Engine =
+    engineIO(Url(urlString), httpClient, block)
 
 /**
  * Creates a new [Engine] using the provided `url` and `block` to configure the [EngineIOOptions].
@@ -91,11 +88,7 @@ public fun engineIO(
  * @param httpClient A [HttpClient] to use for the connection.
  * @param block A lambda function to configure the [EngineIOOptions].
  */
-public fun engineIO(
-    url: Url,
-    httpClient: HttpClient,
-    block: EngineOptionsBuilder.() -> Unit = {}
-): Engine {
+public fun engineIO(url: Url, httpClient: HttpClient, block: EngineOptionsBuilder.() -> Unit = {}): Engine {
     val options = EngineOptionsBuilder(url).apply(block).build()
     return engineIO(httpClient, options)
 }
@@ -122,5 +115,10 @@ private fun engineIO(httpClient: HttpClient, options: EngineIOOptions): Engine {
         TransportType.POLLING -> scope.pollingTransport(httpClient, options)
         TransportType.WEBSOCKET -> scope.webSocketTransport(httpClient, options)
     }
-    return VoxKitEngine(initialTransport = transport, options = options, httpClient = httpClient, scope = scope)
+    return VoxKitEngine(
+        initialTransport = transport,
+        options = options,
+        httpClient = httpClient,
+        scope = scope,
+    )
 }

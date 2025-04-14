@@ -55,7 +55,8 @@ internal class VoxKitSocket(
 
             return when (currentState.reason) {
                 CloseReason.CLIENT_DISCONNECT,
-                CloseReason.SERVER_DISCONNECT -> false
+                CloseReason.SERVER_DISCONNECT,
+                -> false
 
                 else -> true
             }
@@ -119,8 +120,8 @@ internal class VoxKitSocket(
                     if (packet.type == Packet.Type.DISCONNECT) {
                         _events.emit(Event.Disconnect(CloseReason.CLIENT_DISCONNECT, null))
                         state.value = State.Disconnected(
-                            CloseReason.CLIENT_DISCONNECT,
-                            CancellationException("Client disconnect")
+                            reason = CloseReason.CLIENT_DISCONNECT,
+                            cause = CancellationException("Client disconnect"),
                         )
                     }
                     sendPacketToManager(packet)
@@ -151,7 +152,6 @@ internal class VoxKitSocket(
                     logger.d(e) { "Sending packet failed. Will try to send it again." }
                     false
                 }
-
             }.getOrThrow()
         }
     }
@@ -190,7 +190,10 @@ internal class VoxKitSocket(
 
     private suspend fun onDisconnectByServer() {
         manager.onDisconnectSocket(this)
-        state.value = State.Disconnected(CloseReason.SERVER_DISCONNECT, CancellationException("Server disconnect"))
+        state.value = State.Disconnected(
+            reason = CloseReason.SERVER_DISCONNECT,
+            cause = CancellationException("Server disconnect"),
+        )
         _events.emit(Event.Disconnect(CloseReason.SERVER_DISCONNECT, null))
     }
 

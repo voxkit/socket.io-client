@@ -11,6 +11,7 @@ atomicfu = "0.27.0"
 
 # Plugins
 agp = "8.2.2"
+ktlint = "12.2.0"
 
 #Android
 minSdk = "21"
@@ -34,3 +35,4 @@ kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref =
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 atomicfu = { id = "org.jetbrains.kotlinx.atomicfu", version.ref = "atomicfu" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }

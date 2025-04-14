@@ -77,15 +77,13 @@ public class IOOptionsBuilder {
      */
     public var dispatcher: CoroutineDispatcher = Dispatchers.Default
 
-    internal fun build(): IOOptions {
-        return IOOptions(
-            forceNew = forceNew,
-            logger = logger,
-            loggingLevel = loggingLevel,
-            engineLoggingLevel = engineLoggingLevel,
-            dispatcher = dispatcher,
-        )
-    }
+    internal fun build(): IOOptions = IOOptions(
+        forceNew = forceNew,
+        logger = logger,
+        loggingLevel = loggingLevel,
+        engineLoggingLevel = engineLoggingLevel,
+        dispatcher = dispatcher,
+    )
 }
 
 internal data class IOOptions(

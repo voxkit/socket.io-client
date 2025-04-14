@@ -13,20 +13,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
-public fun IO(
-    httpClient: HttpClient,
-    block: IOOptionsBuilder.() -> Unit = {}
-): IO {
-    return IO(
-        httpClient = httpClient,
-        ioOptions = IOOptionsBuilder().apply(block).build(),
-    )
-}
+public fun IO(httpClient: HttpClient, block: IOOptionsBuilder.() -> Unit = {}): IO = IO(
+    httpClient = httpClient,
+    ioOptions = IOOptionsBuilder().apply(block).build(),
+)
 
-public class IO internal constructor(
-    private val httpClient: HttpClient,
-    private val ioOptions: IOOptions,
-) : SynchronizedObject(), AutoCloseable {
+public class IO internal constructor(private val httpClient: HttpClient, private val ioOptions: IOOptions) :
+    SynchronizedObject(),
+    AutoCloseable {
 
     private val loggerFactory = VoxKitLoggerFactory(ioOptions.logger ?: defaultLogger(), ioOptions.loggingLevel)
     private val logger = loggerFactory.createLogger("IO")
@@ -48,16 +42,14 @@ public class IO internal constructor(
         return manager.socket(url.namespace, auth = options.socketOption.auth)
     }
 
-    private fun manager(url: Url, options: ManagerOptions): VoxKitManager {
-        return VoxKitManager(
-            serverUrl = url.withoutNamespace,
-            ioOptions = ioOptions,
-            options = options,
-            scope = scope,
-            httpClient = httpClient,
-            loggerFactory = loggerFactory,
-        )
-    }
+    private fun manager(url: Url, options: ManagerOptions): VoxKitManager = VoxKitManager(
+        serverUrl = url.withoutNamespace,
+        ioOptions = ioOptions,
+        options = options,
+        scope = scope,
+        httpClient = httpClient,
+        loggerFactory = loggerFactory,
+    )
 
     private fun defaultOrCreateManager(url: Url, options: ManagerOptions): VoxKitManager = synchronized(this) {
         if (namespaces.contains(url.namespace)) {

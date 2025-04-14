@@ -41,16 +41,14 @@ internal fun Any?.jsonElement(buffers: MutableList<ByteArray>): JsonElement {
     }
 }
 
-private fun jsonObject(map: Map<*, *>, buffers: MutableList<ByteArray>): JsonObject {
-    return buildJsonObject {
-        for ((key, value) in map) {
-            put(key.toString(), value.jsonElement(buffers))
-        }
+private fun jsonObject(map: Map<*, *>, buffers: MutableList<ByteArray>): JsonObject = buildJsonObject {
+    for ((key, value) in map) {
+        put(key.toString(), value.jsonElement(buffers))
     }
 }
 
-private fun jsonArray(list: List<*>, buffers: MutableList<ByteArray>): JsonArray {
-    return buildJsonArray { list.forEach { it.jsonElement(buffers) } }
+private fun jsonArray(list: List<*>, buffers: MutableList<ByteArray>): JsonArray = buildJsonArray {
+    list.forEach { it.jsonElement(buffers) }
 }
 
 internal fun packetPayloadOf(vararg args: Any): Packet.Payload {

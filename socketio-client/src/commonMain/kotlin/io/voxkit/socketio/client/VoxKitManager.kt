@@ -54,7 +54,8 @@ internal class VoxKitManager(
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
     private val loggerFactory: VoxKitLoggerFactory,
-) : SynchronizedObject(), Manager {
+) : SynchronizedObject(),
+    Manager {
 
     private val _events = MutableSharedFlow<Event>()
     override val events: Flow<Event> = _events.asSharedFlow()
@@ -112,7 +113,9 @@ internal class VoxKitManager(
     }
 
     override suspend fun connect() = coroutineScope {
-        val connected = launch(job, start = CoroutineStart.UNDISPATCHED) { state.first { it == State.Connected } }
+        val connected = launch(job, start = CoroutineStart.UNDISPATCHED) {
+            state.first { it == State.Connected }
+        }
         val disconnected = async(job, start = CoroutineStart.UNDISPATCHED) {
             state.filterIsInstance<State.Disconnected>().first()
         }
@@ -192,8 +195,8 @@ internal class VoxKitManager(
     private fun disconnect() {
         logger.i { "Disconnect socket.io manager" }
         state.value = State.Disconnected(
-            CloseReason.CLIENT_DISCONNECT,
-            CancellationException("Client disconnect")
+            reason = CloseReason.CLIENT_DISCONNECT,
+            cause = CancellationException("Client disconnect"),
         )
         _engine.value?.close()
         _engine.value = null
@@ -270,17 +273,15 @@ internal class VoxKitManager(
         return Result.failure(error)
     }
 
-    private fun createEngineIO(): Engine {
-        return engineIO(serverUrl, httpClient) {
-            path = options.path
-            headers.appendAll(options.headers)
-            parameters.appendAll(options.parameters)
-            timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
-            options.transports?.let { transports = it }
-            loggingLevel = ioOptions.engineLoggingLevel
-            logger = ioOptions.logger
-            dispatcher = ioOptions.dispatcher
-        }
+    private fun createEngineIO(): Engine = engineIO(serverUrl, httpClient) {
+        path = options.path
+        headers.appendAll(options.headers)
+        parameters.appendAll(options.parameters)
+        timestampParam = takeIf { options.timestampRequests }?.let { options.timestampParam }
+        options.transports?.let { transports = it }
+        loggingLevel = ioOptions.engineLoggingLevel
+        logger = ioOptions.logger
+        dispatcher = ioOptions.dispatcher
     }
 
     private fun launchReceivingEngineIOPackets(engine: Engine) {
@@ -292,9 +293,10 @@ internal class VoxKitManager(
             }.recoverCatching { e ->
                 when (e) {
                     is ClosedReceiveChannelException,
-                    is CancellationException -> {
+                    is CancellationException,
+                    -> {
                         if (_engine.value == engine && state.value !is State.Disconnected) {
-                            logger.d { "engine.io incoming packets channel closed. Transit Manager to DISCONNECTED state." }
+                            logger.d { "engine.io incoming packets channel closed. Manager state to DISCONNECTED." }
                             state.value = State.Disconnected(CloseReason.TRANSPORT_CLOSE, e)
                             engine.close()
                             _engine.value = null
@@ -312,11 +314,10 @@ internal class VoxKitManager(
     private suspend fun onEngineIOPacket(enginePacket: EnginePacket, next: ReceiveChannel<EnginePacket>) {
         when (enginePacket) {
             is EnginePacket.Message -> {
-                val packet = runCatching { decodeEngineIOPacket(enginePacket, next) }
-                    .getOrElse {
-                        logger.w(it) { "Failed to decode engine.io packet: $enginePacket. Discard it." }
-                        return
-                    }
+                val packet = runCatching { decodeEngineIOPacket(enginePacket, next) }.getOrElse {
+                    logger.w(it) { "Failed to decode engine.io packet: $enginePacket. Discard it." }
+                    return
+                }
                 logger.d { "client <== server: $packet" }
                 _incoming.emit(packet)
             }
@@ -329,7 +330,7 @@ internal class VoxKitManager(
 
     private suspend fun decodeEngineIOPacket(
         enginePacket: EnginePacket.Message,
-        next: ReceiveChannel<EnginePacket>
+        next: ReceiveChannel<EnginePacket>,
     ): Packet {
         var decoded = parser.decode(enginePacket.data)
 
@@ -355,7 +356,7 @@ internal class VoxKitManager(
                 manager = this,
                 auth = auth,
                 scope = scope,
-                loggerFactory = loggerFactory
+                loggerFactory = loggerFactory,
             )
         }
     }
@@ -369,7 +370,6 @@ internal class VoxKitManager(
             .filter { it.first == Engine.State.Open }
             .map { it.second }
             .first()
-
 
         try {
             when (val encoded = parser.encode(packet)) {
@@ -394,7 +394,10 @@ internal class VoxKitManager(
         sockets.values.forEach { it.close() }
         sockets.clear()
         job.cancel()
-        state.value = State.Disconnected(CloseReason.CLIENT_DISCONNECT, CancellationException("Manager closed"))
+        state.value = State.Disconnected(
+            reason = CloseReason.CLIENT_DISCONNECT,
+            cause = CancellationException("Manager closed"),
+        )
         _engine.value?.close()
         _engine.value = null
     }

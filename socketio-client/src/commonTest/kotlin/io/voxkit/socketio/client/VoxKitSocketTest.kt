@@ -178,7 +178,7 @@ class VoxKitSocketTest {
         assertEquals(
             buf,
             binaryAckBack.payload.decodeJsonOrNull<Binary>(0),
-            "Binary ack should be equal to the sent buffer"
+            "Binary ack should be equal to the sent buffer",
         )
 
         socket.disconnect()
@@ -202,7 +202,7 @@ class VoxKitSocketTest {
         assertEquals(
             Binary(buf),
             binaryAck.decodeJsonOrNull<Binary>(0),
-            "Binary ack should be equal to the sent buffer"
+            "Binary ack should be equal to the sent buffer",
         )
 
         socket.disconnect()
@@ -498,7 +498,6 @@ class VoxKitSocketTest {
         assertEquals(socket1.io, socket2.io, "Socket 1 and Socket 2 managers should be the same")
         val manger = (socket1.io as VoxKitManager)
 
-
         var testPassed: Boolean? = null
         val job1 = launch(start = CoroutineStart.UNDISPATCHED) {
             socket1.io.events.filterIsInstance<Manager.Event.ReconnectAttempt>().first()
@@ -656,7 +655,7 @@ class VoxKitSocketTest {
         assertEquals(
             buf,
             echoBack.payload.decodeJsonOrNull<Binary>(0),
-            "Binary ack should be equal to the sent buffer"
+            "Binary ack should be equal to the sent buffer",
         )
 
         socket.disconnect()
@@ -670,17 +669,13 @@ class VoxKitSocketTest {
         val socket = io.socket()
 
         @Serializable
-        data class JsonWithBinary(
-            val hello: String,
-            val goodbye: String,
-            @Contextual val message: Binary
-        )
+        data class JsonWithBinary(val hello: String, val goodbye: String, @Contextual val message: Binary)
 
         val binaryData = "howdy".encodeToBinary()
         val jsonWithBinary = JsonWithBinary(
             hello = "lol",
             goodbye = "gotcha",
-            message = binaryData
+            message = binaryData,
         )
 
         val echoBackDeferred = async(start = CoroutineStart.UNDISPATCHED) { socket.once("echoBack") }
@@ -722,7 +717,7 @@ class VoxKitSocketTest {
                 echoBack.payload.decodeJsonOrNull<String>(1),
                 echoBack.payload.decodeJsonOrNull<Binary>(2),
             ),
-            "Binary ack should be equal to the sent buffer"
+            "Binary ack should be equal to the sent buffer",
         )
 
         socket.disconnect()
@@ -734,9 +729,7 @@ class VoxKitSocketTest {
         namespace: String = "/",
         queryString: String = "",
         block: ManagerOptionsBuilder.() -> Unit = {},
-    ): Socket {
-        return socket("${serverUrl}$namespace?$queryString", block)
-    }
+    ): Socket = socket("${serverUrl}$namespace?$queryString", block)
 
     private fun io(httpClient: HttpClient, block: IOOptionsBuilder.() -> Unit = {}) = IO(httpClient) {
         block()

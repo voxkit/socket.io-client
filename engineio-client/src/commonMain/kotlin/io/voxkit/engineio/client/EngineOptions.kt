@@ -5,8 +5,8 @@ import io.ktor.http.*
 import io.voxkit.engineio.client.transports.TransportType
 import io.voxkit.engineio.parser.Parser
 import io.voxkit.engineio.util.calculateTransports
-import io.voxkit.socketio.logging.LoggingLevel
 import io.voxkit.socketio.logging.Logger
+import io.voxkit.socketio.logging.LoggingLevel
 import io.voxkit.socketio.logging.VoxKitLoggerFactory
 import io.voxkit.socketio.logging.defaultLogger
 import io.voxkit.yeast.Yeast
@@ -48,7 +48,7 @@ public class EngineOptionsBuilder {
      */
     public var transports: Set<TransportType> = setOf(
         TransportType.POLLING,
-        TransportType.WEBSOCKET
+        TransportType.WEBSOCKET,
     )
 
     /**
@@ -84,19 +84,15 @@ public class EngineOptionsBuilder {
     }
 }
 
-internal fun EngineOptionsBuilder(url: String): EngineOptionsBuilder {
-    return EngineOptionsBuilder(Url(url))
-}
+internal fun EngineOptionsBuilder(url: String): EngineOptionsBuilder = EngineOptionsBuilder(Url(url))
 
-internal fun EngineOptionsBuilder(url: Url): EngineOptionsBuilder {
-    return EngineOptionsBuilder().apply {
-        host = url.host
-        port = url.port
-        path = url.encodedPath
-        secure = url.protocol == URLProtocol.HTTPS || url.protocol == URLProtocol.WSS
-        parameters.appendAll(url.parameters)
-        transports = url.calculateTransports()
-    }
+internal fun EngineOptionsBuilder(url: Url): EngineOptionsBuilder = EngineOptionsBuilder().apply {
+    host = url.host
+    port = url.port
+    path = url.encodedPath
+    secure = url.protocol == URLProtocol.HTTPS || url.protocol == URLProtocol.WSS
+    parameters.appendAll(url.parameters)
+    transports = url.calculateTransports()
 }
 
 internal class EngineIOOptions(

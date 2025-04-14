@@ -2,15 +2,13 @@ package io.voxkit.engineio.client.transports
 
 import io.ktor.client.call.*
 import io.voxkit.engineio.parser.Packet
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Transport interface for Engine.IO client.
  */
-internal interface Transport  {
+internal interface Transport {
     /**
      * Transport type.
      */

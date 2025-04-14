@@ -46,7 +46,7 @@ public data class Packet(
         /**
          * The packet's binary data attachments.
          */
-        val buffers: MutableList<ByteArray> = mutableListOf()
+        val buffers: MutableList<ByteArray> = mutableListOf(),
     )
 }
 

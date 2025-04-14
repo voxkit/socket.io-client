@@ -5,12 +5,8 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
 
 @PublishedApi
-internal fun ioJson(buffers: MutableList<ByteArray>?): Json {
-    return Json {
-        buffers?.let {
-            serializersModule = SerializersModule { contextual(BinarySerializer(buffers)) }
-        }
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+internal fun ioJson(buffers: MutableList<ByteArray>?): Json = Json {
+    buffers?.let { serializersModule = SerializersModule { contextual(BinarySerializer(buffers)) } }
+    ignoreUnknownKeys = true
+    encodeDefaults = true
 }

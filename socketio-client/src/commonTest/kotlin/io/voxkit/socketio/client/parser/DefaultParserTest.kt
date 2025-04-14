@@ -21,46 +21,49 @@ class DefaultParserTest {
             Triple(
                 Packet(Packet.Type.CONNECT),
                 Parser.Encoded.Text("0"),
-                "Failed to encode CONNECT packet"
+                "Failed to encode CONNECT packet",
             ),
             Triple(
                 Packet(
                     Packet.Type.CONNECT,
                     "/admin",
-                    payload = ConnectSuccess(sid = "oSO0OpakMV_3jnilAAAA").toPacketPayload()
+                    payload = ConnectSuccess(sid = "oSO0OpakMV_3jnilAAAA").toPacketPayload(),
                 ),
                 Parser.Encoded.Text("""0/admin,{"sid":"oSO0OpakMV_3jnilAAAA"}"""),
-                """Failed to encode CONNECT packet with namespace "/admin" and data"""
+                """Failed to encode CONNECT packet with namespace "/admin" and data""",
             ),
             Triple(
-                Packet(Packet.Type.CONNECT_ERROR, payload = ConnectError(message = "Not authorized").toPacketPayload()),
+                Packet(
+                    Packet.Type.CONNECT_ERROR,
+                    payload = ConnectError(message = "Not authorized").toPacketPayload(),
+                ),
                 Parser.Encoded.Text("""4{"message":"Not authorized"}"""),
-                """Failed to encode CONNECT_ERROR packet with data"""
+                """Failed to encode CONNECT_ERROR packet with data""",
             ),
             Triple(
                 Packet(Packet.Type.DISCONNECT),
                 Parser.Encoded.Text("1"),
-                "Failed to encode DISCONNECT packet"
+                "Failed to encode DISCONNECT packet",
             ),
             Triple(
                 Packet(Packet.Type.EVENT, payload = packetPayloadOf("foo")),
                 Parser.Encoded.Text("""2["foo"]"""),
-                "Failed to encode EVENT packet with data"
+                "Failed to encode EVENT packet with data",
             ),
             Triple(
                 Packet(Packet.Type.EVENT, "/admin", payload = packetPayloadOf("bar")),
                 Parser.Encoded.Text("""2/admin,["bar"]"""),
-                """Failed to encode EVENT packet with "/admin" namespace and data"""
+                """Failed to encode EVENT packet with "/admin" namespace and data""",
             ),
             Triple(
                 Packet(Packet.Type.EVENT, payload = packetPayloadOf("foo"), ackId = 12),
                 Parser.Encoded.Text("""212["foo"]"""),
-                "Failed to encode EVENT packet with acknowledgment ID"
+                "Failed to encode EVENT packet with acknowledgment ID",
             ),
             Triple(
                 Packet(Packet.Type.ACK, "/admin", payload = packetPayloadOf("bar"), ackId = 13),
                 Parser.Encoded.Text("""3/admin,13["bar"]"""),
-                "Failed to encode ACK packet with acknowledgment ID"
+                "Failed to encode ACK packet with acknowledgment ID",
             ),
         )
 
@@ -75,53 +78,53 @@ class DefaultParserTest {
             Triple(
                 Packet(
                     Packet.Type.EVENT,
-                    payload = packetPayloadOf("baz", binaryOf(1, 2, 3, 4))
+                    payload = packetPayloadOf("baz", binaryOf(1, 2, 3, 4)),
                 ),
                 listOf(
                     """51-["baz",{"_placeholder":true,"num":0}]""",
                     byteArrayOf(1, 2, 3, 4),
                 ),
-                "Failed to encode binary EVENT packet"
+                "Failed to encode binary EVENT packet",
             ),
 
             Triple(
                 Packet(
                     Packet.Type.EVENT,
                     namespace = "/admin",
-                    payload = packetPayloadOf("baz", binaryOf(1, 2), binaryOf(3, 4))
+                    payload = packetPayloadOf("baz", binaryOf(1, 2), binaryOf(3, 4)),
                 ),
                 listOf(
                     """52-/admin,["baz",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""",
                     byteArrayOf(1, 2),
                     byteArrayOf(3, 4),
                 ),
-                "Failed to encode binary EVENT packet with multiple attachments"
+                "Failed to encode binary EVENT packet with multiple attachments",
             ),
 
             Triple(
                 Packet(
                     Packet.Type.EVENT,
                     namespace = "/admin",
-                    payload = packetPayloadOf(mapOf("foo" to "bar", "baz" to binaryOf(1, 2, 3, 4)))
+                    payload = packetPayloadOf(mapOf("foo" to "bar", "baz" to binaryOf(1, 2, 3, 4))),
                 ),
                 listOf(
                     """51-/admin,{"foo":"bar","baz":{"_placeholder":true,"num":0}}""",
                     byteArrayOf(1, 2, 3, 4),
                 ),
-                "Failed to encode EVENT mixing binary and JSON data"
+                "Failed to encode EVENT mixing binary and JSON data",
             ),
             Triple(
                 Packet(
                     Packet.Type.ACK,
                     namespace = "/",
                     payload = packetPayloadOf("bar", binaryOf(1, 2, 3, 4)),
-                    ackId = 15
+                    ackId = 15,
                 ),
                 listOf(
                     """61-15["bar",{"_placeholder":true,"num":0}]""",
                     byteArrayOf(1, 2, 3, 4),
                 ),
-                "Failed to encode BINARY_EVENT packet with multiple attachments"
+                "Failed to encode BINARY_EVENT packet with multiple attachments",
             ),
 
             Triple(
@@ -129,13 +132,13 @@ class DefaultParserTest {
                     Packet.Type.ACK,
                     namespace = "/",
                     payload = packetPayloadOf(binaryOf(1, 2, 3, 4)),
-                    ackId = 15
+                    ackId = 15,
                 ),
                 listOf(
                     """61-15[{"_placeholder":true,"num":0}]""",
                     byteArrayOf(1, 2, 3, 4),
                 ),
-                "Failed to encode BINARY_EVENT packet with multiple attachments"
+                "Failed to encode BINARY_EVENT packet with multiple attachments",
             ),
         )
 
@@ -155,52 +158,55 @@ class DefaultParserTest {
             Triple(
                 "0",
                 Packet(Packet.Type.CONNECT),
-                "Failed to decode CONNECT packet"
+                "Failed to decode CONNECT packet",
             ),
             Triple(
                 """0/admin,{"sid":"oSO0OpakMV_3jnilAAAA"}""",
                 Packet(
                     Packet.Type.CONNECT,
                     "/admin",
-                    payload = ConnectSuccess(sid = "oSO0OpakMV_3jnilAAAA").toPacketPayload()
+                    payload = ConnectSuccess(sid = "oSO0OpakMV_3jnilAAAA").toPacketPayload(),
                 ),
-                """Failed to decode CONNECT packet with namespace "/admin" and data"""
+                """Failed to decode CONNECT packet with namespace "/admin" and data""",
             ),
             Triple(
                 """4{"message":"Not authorized"}""",
-                Packet(Packet.Type.CONNECT_ERROR, payload = ConnectError(message = "Not authorized").toPacketPayload()),
-                "Failed to decode CONNECT_ERROR packet with data"
+                Packet(
+                    Packet.Type.CONNECT_ERROR,
+                    payload = ConnectError(message = "Not authorized").toPacketPayload(),
+                ),
+                "Failed to decode CONNECT_ERROR packet with data",
             ),
             Triple(
                 """4"Not authorized"""",
                 Packet(Packet.Type.CONNECT_ERROR, payload = packetPayloadOf("Not authorized")),
-                "Failed to decode CONNECT_ERROR packet with data"
+                "Failed to decode CONNECT_ERROR packet with data",
             ),
             Triple(
                 "1",
                 Packet(Packet.Type.DISCONNECT),
-                "Failed to decode DISCONNECT packet"
+                "Failed to decode DISCONNECT packet",
             ),
             Triple(
                 """2["foo"]""",
                 Packet(Packet.Type.EVENT, payload = packetPayloadOf("foo")),
-                "Failed to decode EVENT packet with data"
+                "Failed to decode EVENT packet with data",
             ),
             Triple(
                 """2/admin,["bar"]""",
                 Packet(Packet.Type.EVENT, "/admin", payload = packetPayloadOf("bar")),
-                """Failed to decode EVENT packet with "/admin" namespace and data"""
+                """Failed to decode EVENT packet with "/admin" namespace and data""",
             ),
             Triple(
                 """212["foo"]""",
                 Packet(Packet.Type.EVENT, payload = packetPayloadOf("foo"), ackId = 12),
-                "Failed to decode EVENT packet with acknowledgment ID"
+                "Failed to decode EVENT packet with acknowledgment ID",
             ),
             Triple(
                 """3/admin,13["bar"]""",
                 Packet(Packet.Type.ACK, "/admin", payload = packetPayloadOf("bar"), ackId = 13),
-                "Failed to decode ACK packet with acknowledgment ID"
-            )
+                "Failed to decode ACK packet with acknowledgment ID",
+            ),
         )
 
         for ((encoded, expected, message) in testCases) {
@@ -214,7 +220,7 @@ class DefaultParserTest {
     fun testDecodingBinaryEvent() {
         val binaryData = listOf(
             """51-["baz",{"_placeholder":true,"num":0}]""",
-            byteArrayOf(1, 2, 3, 4)
+            byteArrayOf(1, 2, 3, 4),
         )
 
         val decodedPartial = parser.decode(binaryData[0] as String)
@@ -227,9 +233,16 @@ class DefaultParserTest {
         assertEquals(
             buildList {
                 add(JsonPrimitive("baz"))
-                add(JsonObject(mapOf("_placeholder" to JsonPrimitive(true), "num" to JsonPrimitive(0))))
+                add(
+                    JsonObject(
+                        mapOf(
+                            "_placeholder" to JsonPrimitive(true),
+                            "num" to JsonPrimitive(0),
+                        ),
+                    ),
+                )
             },
-            decoded.packet.payload!!.data
+            decoded.packet.payload!!.data,
         )
         assertContentEquals(byteArrayOf(1, 2, 3, 4), decoded.packet.payload!!.buffers[0])
     }
@@ -239,7 +252,7 @@ class DefaultParserTest {
         val binaryDataMultiple = listOf(
             """52-/admin,["baz",{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""",
             byteArrayOf(1, 2),
-            byteArrayOf(3, 4)
+            byteArrayOf(3, 4),
         )
 
         val decodedPartial = parser.decode(binaryDataMultiple[0] as String)
@@ -263,7 +276,7 @@ class DefaultParserTest {
     fun testDecodingBinaryAck() {
         val binaryData = listOf(
             """61-15["bar",{"_placeholder":true,"num":0}]""",
-            byteArrayOf(1, 2, 3, 4)
+            byteArrayOf(1, 2, 3, 4),
         )
 
         val decodedPartial = parser.decode(binaryData[0] as String)
@@ -283,7 +296,7 @@ class DefaultParserTest {
         val binaryDataMultiple = listOf(
             """62-15[{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}]""",
             byteArrayOf(1, 2, 3, 4),
-            byteArrayOf(5, 6)
+            byteArrayOf(5, 6),
         )
 
         val decodedPartial = parser.decode(binaryDataMultiple[0] as String)

@@ -19,7 +19,7 @@ internal object Parser {
         Packet.Pong::class to 3,
         Packet.Message::class to 4,
         Packet.Upgrade::class to 5,
-        Packet.Noop::class to 6
+        Packet.Noop::class to 6,
     )
 
     private val packetsList = packets
@@ -59,9 +59,7 @@ internal object Parser {
         return packet
     }
 
-    fun decodePacket(packet: ByteArray): Packet.Binary {
-        return Packet.Binary(packet)
-    }
+    fun decodePacket(packet: ByteArray): Packet.Binary = Packet.Binary(packet)
 
     fun encodePayload(packets: List<Packet>): String {
         if (packets.isEmpty()) return "0:"
@@ -77,9 +75,8 @@ internal object Parser {
         return result
     }
 
-    private fun encodeBase64Packet(packet: Packet): Any {
-        return if (packet is Packet.Binary) "b" + packet.data.encodeBase64() else encodePacket(packet)
-    }
+    private fun encodeBase64Packet(packet: Packet): Any =
+        if (packet is Packet.Binary) "b" + packet.data.encodeBase64() else encodePacket(packet)
 
     fun decodePayload(data: String?): List<Packet> {
         if (data.isNullOrEmpty()) return listOf(Packet.Error("parser error: empty payload"))
@@ -99,13 +96,11 @@ internal object Parser {
     }
 
     @OptIn(ExperimentalEncodingApi::class)
-    private fun decodeBase64Packet(data: String): Packet {
-        return if (data.isBase64Packet) {
-            runCatching { Packet.Binary(Base64.Default.decode(data.drop(1))) }
-                .getOrElse { Packet.Error("parser error: decode Base64 failed [$data]: $it") }
-        } else {
-            decodePacket(data)
-        }
+    private fun decodeBase64Packet(data: String): Packet = if (data.isBase64Packet) {
+        runCatching { Packet.Binary(Base64.Default.decode(data.drop(1))) }
+            .getOrElse { Packet.Error("parser error: decode Base64 failed [$data]: $it") }
+    } else {
+        decodePacket(data)
     }
 
     private val String.isBase64Packet: Boolean get() = firstOrNull() == 'b' && length > 1

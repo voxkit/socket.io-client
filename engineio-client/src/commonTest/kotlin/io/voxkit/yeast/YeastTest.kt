@@ -10,7 +10,9 @@ import kotlin.test.assertTrue
 class YeastTest {
     private fun waitUntilNextMillisecond() {
         val now = Clock.System.now().toEpochMilliseconds()
-        while (Clock.System.now().toEpochMilliseconds() == now) { /* do nothing */ }
+        while (Clock.System.now().toEpochMilliseconds() == now) {
+            /* do nothing */
+        }
     }
 
     @Test

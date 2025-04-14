@@ -2,6 +2,7 @@
 plugins {
     kotlin("jvm")
     alias(libs.plugins.atomicfu)
+    alias(libs.plugins.ktlint)
 }
 
 group = "io.voxkit.socketio.examples"

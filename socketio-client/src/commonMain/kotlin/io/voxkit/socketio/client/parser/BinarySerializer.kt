@@ -12,8 +12,8 @@ private data class BinaryPlaceholder(@SerialName("_placeholder") val placeholder
 
 public class BinarySerializer(private val buffers: MutableList<ByteArray>) : KSerializer<Binary> {
     override val descriptor: SerialDescriptor = SerialDescriptor(
-        "io.voxkit.socketio.client.parser.Binary",
-        BinaryPlaceholder.serializer().descriptor
+        serialName = "io.voxkit.socketio.client.parser.Binary",
+        original = BinaryPlaceholder.serializer().descriptor,
     )
 
     override fun deserialize(decoder: Decoder): Binary {

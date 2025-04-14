@@ -5,7 +5,6 @@ import io.voxkit.engineio.client.ioHttpClient
 import io.voxkit.engineio.parser.Packet
 import io.voxkit.socketio.logging.LoggingLevel
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest

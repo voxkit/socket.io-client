@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.androidLibrary) apply false
     alias(libs.plugins.atomicfu) apply false
+    alias(libs.plugins.ktlint) apply false
 }
 
 group = "io.voxkit"

@@ -24,7 +24,7 @@ class JsonElementTest {
             assertEquals(
                 expected,
                 jsonElement.isAttachmentPlaceholder,
-                "Expected $expected for $jsonString"
+                "Expected $expected for $jsonString",
             )
         }
     }
