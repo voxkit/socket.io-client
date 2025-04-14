@@ -58,6 +58,6 @@ internal interface Parser {
             val ackId: Long?,
             val numberOfAttachments: Int,
             val buffers: List<ByteArray>,
-        ): Decoded
+        ) : Decoded
     }
 }

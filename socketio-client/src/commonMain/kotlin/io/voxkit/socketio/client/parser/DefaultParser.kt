@@ -15,8 +15,10 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 @PublishedApi
 internal class DefaultParser : Parser {
-    override fun encode(packet: Packet): Parser.Encoded {
-        return if (packet.isBinary) encodeAsBinary(packet) else Parser.Encoded.Text(encodeAsText(packet))
+    override fun encode(packet: Packet): Parser.Encoded = if (packet.isBinary) {
+        encodeAsBinary(packet)
+    } else {
+        Parser.Encoded.Text(encodeAsText(packet))
     }
 
     private fun encodeAsBinary(packet: Packet): Parser.Encoded.Binary {
@@ -103,7 +105,7 @@ internal class DefaultParser : Parser {
                 payload = payload,
                 ackId = ackId,
                 numberOfAttachments = attachmentsCount,
-                buffers = emptyList()
+                buffers = emptyList(),
             )
         } else {
             val packet = decodePacketFromJson(payload, type, namespace, ackId)
@@ -116,14 +118,14 @@ internal class DefaultParser : Parser {
         type: Packet.Type,
         namespace: String?,
         ackId: Long?,
-        buffers: MutableList<ByteArray> = mutableListOf()
+        buffers: MutableList<ByteArray> = mutableListOf(),
     ): Packet {
         val jsonElement = payload?.let { NON_BINARY_JSON.decodeFromString<JsonElement>(it) }
         require(
             jsonElement == null ||
-                    jsonElement is JsonObject ||
-                    jsonElement is JsonArray ||
-                    jsonElement is JsonPrimitive
+                jsonElement is JsonObject ||
+                jsonElement is JsonArray ||
+                jsonElement is JsonPrimitive,
         ) { "Invalid JSON payload: $payload" }
 
         val packetData = when (jsonElement) {
@@ -137,7 +139,7 @@ internal class DefaultParser : Parser {
             type = type,
             namespace = namespace ?: "/",
             payload = packetData?.let { Packet.Payload(it, buffers) },
-            ackId = ackId
+            ackId = ackId,
         )
 
         return packet
@@ -163,7 +165,7 @@ internal class DefaultParser : Parser {
         val attachmentsCount = tok.toIntOrNull() ?: return tokens
         return tokens.copy(
             text = tokens.text.substring(terminatorIdx + 1),
-            attachmentsCount = attachmentsCount
+            attachmentsCount = attachmentsCount,
         )
     }
 
@@ -191,7 +193,11 @@ internal class DefaultParser : Parser {
     )
 
     private enum class Token {
-        ATTACHMENT_COUNT, NAMESPACE, ACK_ID, PAYLOAD;
+        ATTACHMENT_COUNT,
+        NAMESPACE,
+        ACK_ID,
+        PAYLOAD,
+        ;
 
         val next: Token?
             get() = when (this) {

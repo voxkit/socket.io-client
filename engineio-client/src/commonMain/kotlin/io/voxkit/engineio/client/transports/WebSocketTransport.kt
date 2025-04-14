@@ -23,10 +23,8 @@ import kotlinx.coroutines.launch
 internal fun CoroutineScope.webSocketTransport(
     httpClient: HttpClient,
     options: EngineIOOptions,
-    sid: String? = null
-): Transport {
-    return WebSocketTransport(this, httpClient, options, sid)
-}
+    sid: String? = null,
+): Transport = WebSocketTransport(this, httpClient, options, sid)
 
 private class WebSocketTransport(
     private val scope: CoroutineScope,

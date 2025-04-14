@@ -92,7 +92,8 @@ class ParserTest {
 
     @Test
     fun testDecodeOpenPacket() {
-        val data = "0{\"sid\":\"123\",\"upgrades\":[\"websocket\"],\"pingInterval\":1000,\"pingTimeout\":2000,\"maxPayload\":100000}"
+        val data =
+            """0{"sid":"123","upgrades":["websocket"],"pingInterval":1000,"pingTimeout":2000,"maxPayload":100000}"""
         val p = Parser.decodePacket(data)
         assertIs<Packet.Open>(p)
         assertEquals("123", p.sid)
@@ -104,7 +105,7 @@ class ParserTest {
 
     @Test
     fun testDecodeOpenPacketWithoutMaxPayload() {
-        val data = "0{\"sid\":\"123\",\"upgrades\":[\"websocket\"],\"pingInterval\":1000,\"pingTimeout\":2000}"
+        val data = """0{"sid":"123","upgrades":["websocket"],"pingInterval":1000,"pingTimeout":2000}"""
         val p = Parser.decodePacket(data)
         assertIs<Packet.Open>(p)
         assertEquals("123", p.sid)
@@ -176,7 +177,7 @@ class ParserTest {
         val stringData = "test"
         val packets = listOf(
             Packet.Binary(binaryData),
-            Packet.Message(stringData)
+            Packet.Message(stringData),
         )
 
         val encodedPayload = Parser.encodePayload(packets)

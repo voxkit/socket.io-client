@@ -22,8 +22,8 @@ public object Yeast {
         }
     }
 
-    public fun decode(str: String): Long {
-        return str.fold(0L) { decoded, c -> decoded * alphabetLength + (map[c] ?: 0) }
+    public fun decode(str: String): Long = str.fold(0L) { decoded, c ->
+        decoded * alphabetLength + (map[c] ?: 0)
     }
 
     public fun yeast(): String {

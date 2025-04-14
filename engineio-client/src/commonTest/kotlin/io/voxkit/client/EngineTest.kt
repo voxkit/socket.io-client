@@ -56,7 +56,10 @@ class EngineTest {
         val packet = packetDeferred.await()
         engine.close()
 
-        assertEquals(Packet.Message("\uD800\uDC00-\uDB7F\uDFFF\uDB80\uDC00-\uDBFF\uDFFF\uE000-\uF8FF"), packet)
+        assertEquals(
+            Packet.Message("\uD800\uDC00-\uDB7F\uDFFF\uDB80\uDC00-\uDBFF\uDFFF\uE000-\uF8FF"),
+            packet,
+        )
     }
 
     @Test

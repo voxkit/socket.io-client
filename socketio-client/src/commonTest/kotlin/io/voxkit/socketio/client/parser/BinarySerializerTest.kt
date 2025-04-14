@@ -25,9 +25,9 @@ class BinarySerializerTest {
                         mapOf(
                             "num" to JsonPrimitive(0),
                             "_placeholder" to JsonPrimitive(true),
-                        )
+                        ),
                     ),
-                )
+                ),
             ),
             json.encodeToJsonElement(Foo("value", Binary(buffer))),
         )
@@ -47,9 +47,9 @@ class BinarySerializerTest {
                     mapOf(
                         "num" to JsonPrimitive(0),
                         "_placeholder" to JsonPrimitive(true),
-                    )
+                    ),
                 ),
-            )
+            ),
         )
 
         val foo = json.decodeFromJsonElement<Foo>(jsonObject)

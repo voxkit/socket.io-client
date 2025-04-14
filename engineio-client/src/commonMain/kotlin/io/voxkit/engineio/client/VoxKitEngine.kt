@@ -164,7 +164,6 @@ internal class VoxKitEngine(
             .getOrThrow()
     }
 
-
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun produceIncomingPackets(): ReceiveChannel<Packet> {
         return scope.produce(CoroutineName("incoming [engine.io]")) {

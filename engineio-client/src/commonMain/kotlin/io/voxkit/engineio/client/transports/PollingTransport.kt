@@ -19,9 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
-internal fun CoroutineScope.pollingTransport(httpClient: HttpClient, options: EngineIOOptions): Transport {
-    return PollingTransport(scope = this, httpClient = httpClient, options = options)
-}
+internal fun CoroutineScope.pollingTransport(httpClient: HttpClient, options: EngineIOOptions): Transport =
+    PollingTransport(scope = this, httpClient = httpClient, options = options)
 
 internal class PollingTransport(
     private val scope: CoroutineScope,
