@@ -10,9 +10,7 @@ public data class Binary(val buffer: ByteArray) {
         return true
     }
 
-    override fun hashCode(): Int {
-        return buffer.contentHashCode()
-    }
+    override fun hashCode(): Int = buffer.contentHashCode()
 }
 
 /**
@@ -20,18 +18,14 @@ public data class Binary(val buffer: ByteArray) {
  *
  * @return A `Packet.Data.Binary` object containing the encoded byte array of the string.
  */
-public fun String.encodeToBinary(): Binary {
-    return Binary(encodeToByteArray())
-}
+public fun String.encodeToBinary(): Binary = Binary(encodeToByteArray())
 
 /**
  * Extension function to convert a `ByteArray` into a `Packet.Data.Binary` object.
  *
  * @return A `Packet.Data.Binary` object containing the byte array.
  */
-public fun ByteArray.toBinary(): Binary {
-    return Binary(this)
-}
+public fun ByteArray.toBinary(): Binary = Binary(this)
 
 /**
  * Function to create a `Packet.Data.Binary` object from a variable number of `Byte` elements.
@@ -39,6 +33,4 @@ public fun ByteArray.toBinary(): Binary {
  * @param elements The bytes to include in the `Packet.Data.Binary` object.
  * @return A `Packet.Data.Binary` object containing the provided bytes.
  */
-public fun binaryOf(vararg elements: Byte): Binary {
-    return Binary(elements)
-}
+public fun binaryOf(vararg elements: Byte): Binary = Binary(elements)

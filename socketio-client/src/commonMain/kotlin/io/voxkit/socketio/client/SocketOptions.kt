@@ -25,9 +25,7 @@ public class SocketOptionsBuilder {
      */
     public var retries: Int = Int.MAX_VALUE
 
-    internal fun build(): SocketOptions {
-        return SocketOptions(ackTimeout, auth, retries)
-    }
+    internal fun build(): SocketOptions = SocketOptions(ackTimeout, auth, retries)
 }
 
 public data class AuthSocketOption(
